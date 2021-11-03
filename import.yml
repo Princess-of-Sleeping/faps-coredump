@@ -1,0 +1,12 @@
+version: 2
+firmware: 3.60
+modules:
+  SceKernelThreadMgr:
+    nid: 0xF46ED7B2
+    libraries:
+      SceThreadmgrForDriver:
+        kernel: false
+        nid: 0xE2C40624
+        functions:
+          sceKernelGetThreadInfoInternal: 0xDD8D9429
+          sceKernelGetThreadFloatRegister: 0x5CDE387A
