@@ -6,6 +6,12 @@
 #ifndef _FAPS_COREDUMP_FUNC_H_
 #define _FAPS_COREDUMP_FUNC_H_
 
+int fapsCoredumpGetDumpTime(FapsCoredumpContext *context);
+int fapsCoredumpMakeDumpPathName(FapsCoredumpContext *context);
+int fapsCoredumpCreateDumpDirectory(FapsCoredumpContext *context);
+int fapsCoredumpInitUIDPool(FapsCoredumpContext *context);
+int fapsCoredumpFineUIDPool(FapsCoredumpContext *context);
+
 int fapsCoredumpCreateSummary(FapsCoredumpContext *context);
 int fapsCoredumpCreateTtyInfo(FapsCoredumpContext *context);
 int fapsCoredumpCreateHwInfo(FapsCoredumpContext *context);
@@ -16,8 +22,6 @@ int fapsCoredumpCreateProcessIofileInfo(FapsCoredumpContext *context);
 int fapsCoredumpCreateCrashThreadInfo(FapsCoredumpContext *context);
 int fapsCoredumpCreateCrashThreadStackDump(FapsCoredumpContext *context);
 
-int fapsCoredumpMemblockAlloc(FapsCoredumpContext *context);
-int fapsFreeMemBlockInfo(FapsCoredumpContext *context);
 int fapsUpdateMemBlockInfo(FapsCoredumpContext *context);
 int fapsCreateMemBlockInfo(FapsCoredumpContext *context);
 int fapsCreateMemBlockDump(FapsCoredumpContext *context);

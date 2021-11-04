@@ -17,6 +17,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions")
 add_executable(faps-coredump
   src/main.c
   src/coredump.c
+  src/coredump_func.c
   src/log.c
   src/utility.c
   src/process_mapping.c

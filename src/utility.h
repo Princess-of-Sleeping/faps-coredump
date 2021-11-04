@@ -23,6 +23,5 @@ int fapsCoredumpIsSceShellUnknownCrash(const FapsCoredumpContext *context);
 int fapsCoredumpIsGpuCrash(const FapsCoredumpContext *context);
 
 int fapsCoredumpIsFullDump(void);
-int fapsCoredumpIsFullDumpUpdate(void);
 
 #endif /* _FAPS_COREDUMP_UTILITY_H_ */

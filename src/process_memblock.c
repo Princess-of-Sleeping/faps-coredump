@@ -114,9 +114,6 @@ int fapsCreateMemBlockDump(FapsCoredumpContext *context){
 		return -1;
 	}
 
-	if(fapsCoredumpIsFullDump() == 0)
-		return 0;
-
 	ElfEntryInfo *pElfEntryInfo;
 
 	// size = sizeof(ElfEntryInfo) * 2048
@@ -355,27 +352,5 @@ int fapsUpdateMemBlockInfo(FapsCoredumpContext *context){
 
 	context->memblock_number = memblock_number;
 
-	return 0;
-}
-
-int fapsCoredumpMemblockAlloc(FapsCoredumpContext *context){
-/*
-	SceUID memid = ksceKernelAllocMemBlock("FapsCoredumpMemblockUID", 0x1020D006, sizeof(SceUID) * 2048, NULL);
-	if(memid < 0){
-		return memid;
-	}
-
-	context->memblock_list_id = memid;
-
-	ksceKernelGetMemBlockBase(memid, (void **)(&(context->memblock_list)));
-*/
-	return 0;
-}
-
-int fapsFreeMemBlockInfo(FapsCoredumpContext *context){
-/*
-	ksceKernelFreeMemBlock(context->memblock_list_id);
-	context->memblock_list_id = -1;
-*/
 	return 0;
 }

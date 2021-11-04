@@ -111,9 +111,7 @@ int fapsCoredumpIsGpuCrash(const FapsCoredumpContext *context){
 	return 0;
 }
 
-int is_fulldump;
-
-int _fapsCoredumpIsFullDumpUpdate(void){
+int fapsCoredumpIsFullDump(void){
 
 	SceIoStat stat;
 	int res, val;
@@ -132,15 +130,4 @@ int _fapsCoredumpIsFullDumpUpdate(void){
 	res = (ksceIoGetstat("ux0:data/faps-coredump-fulldump-flag", &stat) == 0) ? 1 : 0;
 
 	return res;
-}
-
-int fapsCoredumpIsFullDumpUpdate(void){
-
-	is_fulldump = _fapsCoredumpIsFullDumpUpdate();
-
-	return 0;
-}
-
-int fapsCoredumpIsFullDump(void){
-	return is_fulldump;
 }

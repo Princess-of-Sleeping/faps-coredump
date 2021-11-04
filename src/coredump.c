@@ -3,11 +3,9 @@
  * Copyright (C) 2021, Princess of Sleeping
  */
 
-#include <psp2kern/kernel/threadmgr.h>
-#include <psp2kern/kernel/sysmem.h>
+#include <psp2kern/kernel/debug.h>
 #include <psp2kern/kernel/sysclib.h>
-#include <psp2kern/kernel/rtc.h>
-#include <psp2kern/io/fcntl.h>
+#include <psp2kern/kernel/threadmgr.h>
 #include <psp2kern/ctrl.h>
 #include <psp2kern/touch.h>
 #include "types.h"
@@ -19,170 +17,182 @@ extern SceUID mutex_uid;
 
 typedef struct FapsCoredumpDumpFunc {
 	int (* func)(FapsCoredumpContext *context);
+	const char *name;
+	SceUInt32 flag;
 } FapsCoredumpDumpFunc;
+
+#define FAPS_COREDUMP_FUNC_FLAG_FORCED    (1 << 0)
+#define FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE (1 << 1)
+#define FAPS_COREDUMP_FUNC_FLAG_LEVEL1    (1 << 2)
+#define FAPS_COREDUMP_FUNC_FLAG_LEVEL2    (1 << 3)
+#define FAPS_COREDUMP_FUNC_FLAG_LEVEL3    (1 << 4)
+#define FAPS_COREDUMP_FUNC_FLAG_LEVEL4    (1 << 5)
+#define FAPS_COREDUMP_FUNC_FLAG_LEVEL5    (1 << 6)
+
+#define FAPS_COREDUMP_FUNC_FLAG_MINIMUM   FAPS_COREDUMP_FUNC_FLAG_LEVEL1
+#define FAPS_COREDUMP_FUNC_FLAG_LITTLE    FAPS_COREDUMP_FUNC_FLAG_LEVEL2
+#define FAPS_COREDUMP_FUNC_FLAG_NORMAL    FAPS_COREDUMP_FUNC_FLAG_LEVEL3
+#define FAPS_COREDUMP_FUNC_FLAG_MANY      FAPS_COREDUMP_FUNC_FLAG_LEVEL4
+#define FAPS_COREDUMP_FUNC_FLAG_FULL      FAPS_COREDUMP_FUNC_FLAG_LEVEL5
 
 const FapsCoredumpDumpFunc dump_func_list[] = {
 	{
-		.func = fapsCoredumpInitProcessModule
+		.func = fapsCoredumpGetDumpTime,
+		.name = "GET_DUMP_TIME",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_FORCED
 	},
 	{
-		.func = fapsCoredumpCreateSummary
+		.func = fapsCoredumpMakeDumpPathName,
+		.name = "MAKE_DUMP_PATH_NAME",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_FORCED
 	},
 	{
-		.func = fapsCoredumpCreateHwInfo
+		.func = fapsCoredumpCreateDumpDirectory,
+		.name = "CREATE_DUMP_DIRECTORY",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_FORCED
 	},
 	{
-		.func = fapsCoredumpCreateTtyInfo
+		.func = fapsCoredumpInitProcessModule,
+		.name = "INIT_PROCESS_MODULE",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_FORCED
 	},
 	{
-		.func = fapsCoredumpCreateProcessInfo
+		.func = fapsCoredumpInitUIDPool,
+		.name = "UID_POOL_INIT",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_FORCED
 	},
 	{
-		.func = fapsCoredumpCreateAsInfoDump
+		.func = fapsCoredumpCreateCrashThreadInfo,
+		.name = "CRASH_THREAD_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MINIMUM
 	},
 	{
-		.func = fapsCoredumpCreateCrashThreadInfo
+		.func = fapsCoredumpCreateCrashThreadStackDump,
+		.name = "CRASH_THREAD_STACK_DUMP",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MINIMUM
 	},
 	{
-		.func = fapsCoredumpCreateCrashThreadStackDump
+		.func = fapsCoredumpCreateSummary,
+		.name = "SUMMARY",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_LITTLE
 	},
 	{
-		.func = fapsCoredumpCreateEventLogInfo
+		.func = fapsCoredumpCreateHwInfo,
+		.name = "HW_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_LITTLE
 	},
 	{
-		.func = fapsCoredumpCreateModulesInfo
+		.func = fapsCoredumpCreateTtyInfo,
+		.name = "TTY_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_LITTLE
 	},
 	{
-		.func = fapsCoredumpCreateModuleSegmentDump
+		.func = fapsCoredumpCreateProcessInfo,
+		.name = "PROCESS_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_NORMAL
 	},
 	{
-		.func = fapsCoredumpCreateModuleNonlinkedInfo
+		.func = fapsCoredumpCreateAsInfoDump,
+		.name = "ADDRESS_SPACE_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_NORMAL
 	},
 	{
-		.func = fapsCoredumpMemblockAlloc
+		.func = fapsCoredumpCreateEventLogInfo,
+		.name = "EVENT_LOG_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
 	},
 	{
-		.func = fapsUpdateMemBlockInfo
+		.func = fapsCoredumpCreateModulesInfo,
+		.name = "MODULE_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_NORMAL
 	},
 	{
-		.func = fapsCreateMemBlockInfo
+		.func = fapsCoredumpCreateModuleSegmentDump,
+		.name = "MODULE_SEGMENT_DUMP",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
 	},
 	{
-		.func = fapsCreateMemBlockDump
+		.func = fapsCoredumpCreateModuleNonlinkedInfo,
+		.name = "MODULE_NONLINKED_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
 	},
 	{
-		.func = fapsFreeMemBlockInfo
+		.func = fapsUpdateMemBlockInfo,
+		.name = "MEMBLOCK_UPDATE",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_NORMAL
 	},
 	{
-		.func = fapsCoredumpCreateProcessScreenShot
+		.func = fapsCreateMemBlockInfo,
+		.name = "MEMBLOCK_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_NORMAL
 	},
 	{
-		.func = fapsCoredumpCreateProcessIofileInfo
+		.func = fapsCreateMemBlockDump,
+		.name = "MEMBLOCK_DUMP",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_FULL
 	},
 	{
-		.func = fapsCreateProcessThreadInfo
+		.func = fapsCoredumpCreateProcessScreenShot,
+		.name = "PROCESS_SCREEN_SHOT",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
 	},
 	{
-		.func = fapsCreateProcessSemaphoreInfo
+		.func = fapsCoredumpCreateProcessIofileInfo,
+		.name = "PROCESS_FILE_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_NORMAL
 	},
 	{
-		.func = fapsCreateProcessEventflagInfo
+		.func = fapsCreateProcessThreadInfo,
+		.name = "PROCESS_THREAD_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
 	},
 	{
-		.func = fapsCreateProcessMutexInfo
+		.func = fapsCreateProcessSemaphoreInfo,
+		.name = "PROCESS_SEMA_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
 	},
 	{
-		.func = fapsCreateProcessLwMutexInfo
+		.func = fapsCreateProcessEventflagInfo,
+		.name = "PROCESS_EVENT_FLAG_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
 	},
 	{
-		.func = fapsCreateProcessMsgpipeInfo
+		.func = fapsCreateProcessMutexInfo,
+		.name = "PROCESS_MUTEX_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
 	},
 	{
-		.func = fapsCreateProcessLwCondInfo
+		.func = fapsCreateProcessLwMutexInfo,
+		.name = "PROCESS_LW_MUTEX_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
+	},
+	{
+		.func = fapsCreateProcessMsgpipeInfo,
+		.name = "PROCESS_MSG_PIPE_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
+	},
+	{
+		.func = fapsCreateProcessLwCondInfo,
+		.name = "PROCESS_LW_COND_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
+	},
+	{
+		.func = fapsCoredumpFineUIDPool,
+		.name = "UID_POOL_FINE",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_FORCED
 	}
 };
 
 #define FAPS_COREDUMP_DUMP_FUNC_NUMBER (sizeof(dump_func_list) / sizeof(dump_func_list[0]))
 
-int fapsCreateCoredump(FapsCoredumpContext *context){
-
-	int res;
-	SceUID memid;
-	SceIoStat stat;
-	SceRtcTick tick;
-	SceDateTime date_time;
-
-	if(context->pid == SCE_GUID_KERNEL_PROCESS_ID)
-		return 0;
-
-	fapsCoredumpIsFullDumpUpdate();
-
-	memid = ksceKernelAllocMemBlock("SceUIDPool", 0x1020D006, 0x2000, NULL);
-	if(memid < 0)
-		return memid;
-
-	res = ksceKernelGetMemBlockBase(memid, (void **)&(context->uid_pool));
-	if(res < 0)
-		goto end;
-
-	res = ksceRtcGetCurrentTick(&tick);
-	if(res < 0)
-		goto end;
-
-	res = ksceRtcConvertTickToDateTime(&date_time, &tick);
-	if(res < 0)
-		goto end;
-
-	res = ksceRtcConvertDateTimeToUnixTime(&date_time, &(context->tick));
-	if(res < 0)
-		goto end;
-
-	context->name[FAPS_COREDUMP_NAME_MAX_LENGTH] = 0;
-	context->path[FAPS_COREDUMP_PATH_MAX_LENGTH] = 0;
-
-	res = ksceKernelGetProcessTitleId(context->pid, context->titleid, FAPS_COREDUMP_TITLEID_SIZE);
-	if(res < 0){
-		context->titleid[FAPS_COREDUMP_TITLEID_MAX_LENGTH] = 0;
-		strncpy(context->titleid, "unknown", FAPS_COREDUMP_TITLEID_MAX_LENGTH);
-	}
-
-	snprintf(context->name, FAPS_COREDUMP_NAME_MAX_LENGTH, "fapscore-%s-%010llu-0x%010X", context->titleid, context->tick, context->pid);
-
-	if(ksceIoGetstat("host0:", &stat) == 0){
-		snprintf(context->path, FAPS_COREDUMP_PATH_MAX_LENGTH, "%s/%s", "host0:", context->name);
-	}else if(ksceIoGetstat("sd0:", &stat) == 0){
-		snprintf(context->path, FAPS_COREDUMP_PATH_MAX_LENGTH, "%s/%s", "sd0:", context->name);
-	}else{
-		snprintf(context->path, FAPS_COREDUMP_PATH_MAX_LENGTH, "%s/%s", "ux0:/data", context->name);
-	}
-
-	res = ksceIoMkdir(context->path, 0666);
-	if(res < 0)
-		goto end;
-
-	for(int i=0;i<FAPS_COREDUMP_DUMP_FUNC_NUMBER;i++){
-		context->update_func(context->task_id, context->pid, (i * 100) / FAPS_COREDUMP_DUMP_FUNC_NUMBER);
-		dump_func_list[i].func(context);
-	}
-
-	context->update_func(context->task_id, context->pid, (FAPS_COREDUMP_DUMP_FUNC_NUMBER * 100) / FAPS_COREDUMP_DUMP_FUNC_NUMBER);
-
-	res = 0;
-
-end:
-	if(memid >= 0)
-		ksceKernelFreeMemBlock(memid);
-
-	return res;
-}
-
 int fapsCoredumpTrigger(FapsCoredumpContext *context){
 
-	int res, cpu;
+	int res, cpu, is_skip, is_fulldump, flag;
 	SceUInt32 ctrl_mask;
 	SceInt64 time_s, time_e;
 
-	// TODO: Add ctrl/touch disables
+	if(context->pid == SCE_GUID_KERNEL_PROCESS_ID)
+		return 0;
 
 	cpu = ksceKernelCpuGetCpuId();
 
@@ -197,17 +207,45 @@ int fapsCoredumpTrigger(FapsCoredumpContext *context){
 	ksceDebugPrintf("%d:[faps-coredump] start\n", cpu);
 
 	time_s = ksceKernelGetSystemTimeWide();
-	res = fapsCreateCoredump(context);
+
+	is_skip = 0; // TODO
+	is_fulldump = fapsCoredumpIsFullDump();
+
+	for(int i=0;i<FAPS_COREDUMP_DUMP_FUNC_NUMBER;i++){
+		context->update_func(context->task_id, context->pid, (i * 100) / FAPS_COREDUMP_DUMP_FUNC_NUMBER);
+
+		flag = dump_func_list[i].flag;
+
+		if((flag & FAPS_COREDUMP_FUNC_FLAG_FORCED) == 0){
+			if((flag & FAPS_COREDUMP_FUNC_FLAG_FULL) != 0 && is_fulldump == 0)
+				continue;
+
+			if((flag & FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE) != 0 && is_skip != 0)
+				continue;
+		}
+
+		if(dump_func_list[i].func == NULL){
+			res = 0;
+		}else{
+			res = dump_func_list[i].func(context);
+		}
+
+		if(res < 0){
+			ksceDebugPrintf("%d:[faps-coredump] failed function (%s result=0x%X)\n", cpu, dump_func_list[i].func, res);
+
+			if((flag & FAPS_COREDUMP_FUNC_FLAG_FORCED) != 0)
+				is_skip = 1;
+		}
+	}
+
+	context->update_func(context->task_id, context->pid, (FAPS_COREDUMP_DUMP_FUNC_NUMBER * 100) / FAPS_COREDUMP_DUMP_FUNC_NUMBER);
+
 	time_e = ksceKernelGetSystemTimeWide();
 
 	// Do not clean the context.
 	// memset(context, 0, sizeof(*context));
 
-	ksceDebugPrintf("%d:[faps-coredump] %s. in %lld usec.\n", cpu, (res >= 0) ? "done" : "error", (SceInt64)(time_e - time_s));
-
-	if(res < 0){
-		ksceDebugPrintf("%d:[faps-coredump] result=0x%X.\n", cpu, res);
-	}
+	ksceDebugPrintf("%d:[faps-coredump] done. in %lld usec.\n", cpu, (SceInt64)(time_e - time_s));
 
 	ksceCtrlUpdateMaskForAll(0, ctrl_mask);
 

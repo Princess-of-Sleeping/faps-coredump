@@ -82,6 +82,11 @@ int fapsCoredumpMoveOriginalSceCoredump(FapsCoredumpContext *context, const char
 
 	int res = 0;
 
+	int path_len = strnlen(context->path, FAPS_COREDUMP_PATH_SIZE);
+
+	if(path_len == 0 || path_len == FAPS_COREDUMP_PATH_SIZE)
+		return -1;
+
 	if(strncmp(sce_coredump_path, context->path, 6) == 0){
 
 		const char *file = strchr_back(sce_coredump_path, '/');
@@ -155,10 +160,11 @@ int ksceCoredumpCreateDump_patch(SceUID pid, const char *titleid, SceSize titlei
 
 	int res = TAI_CONTINUE(int, ksceCoredumpCreateDump_ref, pid, titleid, titleid_len, app_title, app_title_len, flags, coredump_path, coredump_path_max);
 	if(res == 0){ // Already coredump file is closed
-		fapsCoredumpMoveOriginalSceCoredump(&coredump_context, coredump_path);
-
-		coredump_path[coredump_path_max - 1] = 0;
-		strncpy(coredump_path, coredump_context.path, coredump_path_max - 1);
+		int res2 = fapsCoredumpMoveOriginalSceCoredump(&coredump_context, coredump_path);
+		if(res2 >= 0){
+			coredump_path[coredump_path_max - 1] = 0;
+			strncpy(coredump_path, coredump_context.path, coredump_path_max - 1);
+		}
 	}
 
 	return res;
