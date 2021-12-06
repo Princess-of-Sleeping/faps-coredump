@@ -8,6 +8,14 @@
 
 #include <psp2kern/types.h>
 
+#define SCE_KERNEL_MODULE_STATE_READY_LOAD   1
+#define SCE_KERNEL_MODULE_STATE_READY_START  2
+#define SCE_KERNEL_MODULE_STATE_DONE_START   3
+
+#define SCE_KERNEL_MODULE_STATE_READY_STOP   4
+#define SCE_KERNEL_MODULE_STATE_READY_UNLOAD 5
+#define SCE_KERNEL_MODULE_STATE_DONE_UNLOAD  0
+
 typedef struct SceModuleInfoInternal SceModuleInfoInternal;
 typedef struct SceModuleLibraryInfo SceModuleLibraryInfo;
 
@@ -57,12 +65,11 @@ typedef union SceModuleImport {
 typedef struct SceModuleExport {
 	uint16_t size; // 0x20
 
-	uint16_t libver[2];
 /*
-	uint16_t libver_minor;
-	uint8_t  libver_major;
-	uint8_t  flags; // 0x40:user export
+	uint16_t libver[2];
 */
+	uint16_t version;
+	uint16_t flags; // 0x4000:user export
 	uint16_t entry_num_function;
 	uint16_t entry_num_variable;
 	uint16_t data_0x0A; // unused?
@@ -73,27 +80,14 @@ typedef struct SceModuleExport {
 	void    **table_entry;
 } SceModuleExport;
 
-typedef struct SceModuleLibraryImportInfo {
-	SceUID stubid;
-	SceModuleImport *pImportInfo;
-	SceModuleLibraryInfo *pLibraryInfo;
-	SceModuleInfoInternal *pModuleInfo;
-	int data_0x10; // zero?
-} SceModuleLibraryImportInfo;
-
-typedef struct SceModuleImportList {
-	struct SceModuleImportList *next;
-	SceModuleLibraryImportInfo list[];
-} SceModuleImportList;
-
-typedef struct SceModuleImportedInfo {
-	struct SceModuleImportedInfo *next;
+typedef struct SceModuleImportInfo {
+	struct SceModuleImportInfo *next;
 	SceUID stubid;
 	SceModuleImport *pImportInfo;
 	SceModuleLibraryInfo *pLibraryInfo;
 	SceModuleInfoInternal *pModuleInfo;
 	int data_0x14; // zero?
-} SceModuleImportedInfo;
+} SceModuleImportInfo;
 
 typedef struct SceModuleLibraryInfo { // size is 0x2C
 	struct SceModuleLibraryInfo *next;
@@ -112,7 +106,7 @@ typedef struct SceModuleLibraryInfo { // size is 0x2C
 	 * Number of times this export was imported into another module
 	 */
 	SceSize number_of_imported;
-	SceModuleImportedInfo *pImportedInfo;
+	SceModuleImportInfo *pImportedInfo;
 	SceUID libid_kernel;
 	SceUID libid_user;
 	SceModuleInfoInternal *pModuleInfo;
@@ -135,12 +129,38 @@ typedef struct SceSegmentInfoInternal { // size is 0x14
 	SceUID memblk_id;
 } SceSegmentInfoInternal;
 
-typedef struct SceModuleInfoInternal {
+typedef struct SceModuleDebugPointExportsInfo { // size is 0x8 bytes on FWs 0.931-3.73
+	SceUInt32 version;    // ex: 1
+	SceUInt32 numEntries; // ex: 1, 5, 7, 16
+} SceModuleDebugPointExportsInfo;
+
+typedef struct SceModuleDebugPointExport { // size is 0x28-bytes on FWs 0.931-3.73
+	void *unk_0x0;            // maybe pointer to a structure or could be a SceUInt32
+	const char *type_name;    // "__proc_", "__interrupt_", "__sched_"
+	const char *command_name; // Name of the operation. ex: "exec__failure
+	const void *addr;         // Pointer to the exported instructions
+	void *storage;            // Can be used in the exported instructions
+	void *unk_0x14;           // Seems unused
+	void *unk_0x18;           // Seems unused
+	void *unk_0x1C;           // Seems unused
+	void *unk_0x20;           // Seems unused
+	void *unk_0x24;           // Seems unused
+} SceModuleDebugPointExport;
+
+typedef struct SceModuleEntryCallParam { // size is 0x14-bytes
+	SceUInt32 version; // should be 4
+	SceUInt32 threadPriority;
+	SceUInt32 threadStackSize;
+	SceUInt32 data_0x0C;
+	SceUInt32 cpuAffinityMask;
+} SceModuleEntryCallParam;
+
+typedef struct SceModuleInfoInternal { // size is 0xE8-bytes
 	struct SceModuleInfoInternal *next;
 	uint16_t flags;
 	uint8_t state;
 	uint8_t data_0x07;
-	uint32_t version;	// ex : 0x03600011
+	SceUInt32 version;	// ex : 0x03600011
 	SceUID modid_kernel;	// This is only used by kernel modules
 
 	// 0x10
@@ -158,7 +178,7 @@ typedef struct SceModuleInfoInternal {
 	void *libstub_btm;
 
 	// 0x30
-	uint32_t module_nid;
+	SceUInt32 fingerprint;
 	void *tlsInit;
 	SceSize tlsInitSize;
 	SceSize tlsAreaSize;
@@ -170,24 +190,19 @@ typedef struct SceModuleInfoInternal {
 	void *extabBtm;
 
 	// 0x50
-	uint16_t lib_export_num;            // Includes noname library
-	uint16_t lib_import_num;
+	SceUInt16 lib_export_num;           // Includes noname library
+	SceUInt16 lib_import_num;
 	SceModuleExport *data_0x54;
 	SceModuleExport *data_0x58;         // export relation
-
-	/*
-	 * export list
-	 * maybe this kernel only
-	 * And includes noname library
-	 *
-	 * if you using this data, need call get_module_object
-	 */
 	SceModuleLibraryInfo *pLibraryInfo;
 
 	// 0x60
 	SceModuleImport *data_0x60;         // first_import?
-	SceModuleImportList *imports;       // allocated by sceKernelAlloc
+	SceModuleImportInfo *import_list;
+
+
 	char *path;
+	struct { // size is 0x48-bytes
 	int segments_num;
 
 	// 0x70
@@ -196,32 +211,29 @@ typedef struct SceModuleInfoInternal {
 
 	// 0xB0
 	int data_0xB0;
+	};
 	SceKernelModuleEntry module_start;
 	SceKernelModuleEntry module_stop;
 	SceKernelModuleEntry module_exit;
 
-	int data_0xC0;
+	SceKernelModuleEntry module_bootstart;
 	void *module_proc_param;
-	int data_0xC8;
-	int data_0xCC;
+	SceModuleEntryCallParam *module_start_thread_param; // noname export. NID:0x1A9822A4
+	SceModuleEntryCallParam *module_stop_thread_param; // noname export. NID:0xD20886EB
 
-	/*
-	 * hb  : elf data
-	 * sce : some data
-	 */
-	void *data_0xD0;
+	void *arm_exidx; // need dipsw 0xD2
 	SceModuleSharedInfo *pSharedInfo; // allocated by sceKernelAlloc
 	int data_0xD8;
-	int data_0xDC;
+	SceModuleDebugPointExportsInfo *pDbgPointInfo;
 
-	int data_0xE0;
+	SceModuleDebugPointExport **pDbgPointList; // noname export. NID:0x8CE938B1
 	int data_0xE4;
-	int data_0xE8;
-} SceModuleInfoInternal; // size is 0xEC
+} SceModuleInfoInternal;
 
-typedef struct SceModuleObject { // size is 0xF4
+typedef struct SceModuleObject { // size is 0xF4-bytes
 	uint32_t sce_reserved[2];
 	SceModuleInfoInternal obj_base;
+	int data_0xE8;
 } SceModuleObject;
 
 typedef struct SceModuleLibraryObject {
@@ -236,13 +248,36 @@ typedef struct SceModuleLibStubObject {
 	SceSize num; // maybe nonlinked import num
 } SceModuleLibStubObject;
 
-typedef struct SceModuleNonlinkedInfo {
-	struct SceModuleNonlinkedInfo *next;
-	SceUID stubid;
-	SceModuleImport *pImportInfo;
-	int data_0x0C;
-	SceModuleInfoInternal *pModuleInfo;
-	int data_0x14;
-} SceModuleNonlinkedInfo;
+#define SCE_KERNEL_PRELOAD_INHIBIT_LIBC        (0x10000)
+#define SCE_KERNEL_PRELOAD_INHIBIT_LIBDBG      (0x20000)
+#define SCE_KERNEL_PRELOAD_INHIBIT_LIBSHELLSVC (0x80000)
+#define SCE_KERNEL_PRELOAD_INHIBIT_LIBCDLG     (0x100000)
+#define SCE_KERNEL_PRELOAD_INHIBIT_LIBFIOS2    (0x200000)
+#define SCE_KERNEL_PRELOAD_INHIBIT_APPUTIL     (0x400000)
+#define SCE_KERNEL_PRELOAD_INHIBIT_LIBSCEFT2   (0x800000)
+#define SCE_KERNEL_PRELOAD_INHIBIT_LIBPVF      (0x1000000)
+#define SCE_KERNEL_PRELOAD_INHIBIT_LIBPERF     (0x2000000)
+
+// used by sceKernelLoadPreloadingModules
+
+typedef struct SceKernelPreloadModuleInfo { // size is 0x24
+	const char *module_name;
+	const char *path[6];
+	SceUInt32 inhibit;
+	int flags;
+} SceKernelPreloadModuleInfo;
+
+typedef struct SceLoadProcessParam { // maybe size is 0x7C
+	int sdk_version;
+	char thread_name[0x20];
+	int thread_priority;
+	SceSize stack_size;
+	uint8_t data_174[0x8];
+	uint8_t data_17C[0x1C];
+	uint8_t data_198[0x4];
+	char process_name[0x20]; // not titleid
+	uint32_t preload_inhibit;
+	void *module_proc_param;
+} SceLoadProcessParam;
 
 #endif /* _PSP2_KERNEL_MODULEMGR_INTERNAL_H_ */

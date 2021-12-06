@@ -49,17 +49,12 @@ int write_file_proc_by_fd(SceUID pid, SceUID fd, const void *data, SceSize len){
 	return 0;
 }
 
-// TODO: remove this function
-int write_file_user_by_fd(SceUID pid, SceUID fd, const void *data, SceSize len){
-	return write_file_proc_by_fd(pid, fd, data, len);
-}
-
-int write_file_user(SceUID pid, const char *path, const void *data, SceSize len){
+int write_file_proc(SceUID pid, const char *path, const void *data, SceSize len){
 
 	int res;
 	SceUID fd;
 
-	if((pid == 0x10005) || (path == NULL) || (data == NULL) || (len == 0))
+	if((path == NULL) || (data == NULL) || (len == 0))
 		return -1;
 
 	fd = ksceIoOpen(path, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0666);
@@ -74,19 +69,7 @@ int write_file_user(SceUID pid, const char *path, const void *data, SceSize len)
 }
 
 int write_file(const char *path, const void *data, SceSize len){
-
-	int res;
-	SceUID fd;
-
-	fd = ksceIoOpen(path, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
-	if(fd < 0)
-		return fd;
-
-	res = write_file_proc_by_fd(SCE_GUID_KERNEL_PROCESS_ID, fd, data, len);
-
-	ksceIoClose(fd);
-
-	return res;
+	return write_file_proc(SCE_GUID_KERNEL_PROCESS_ID, path, data, len);
 }
 
 int fapsCoredumpIsNonCpuCrash(const FapsCoredumpContext *context){
@@ -111,7 +94,7 @@ int fapsCoredumpIsGpuCrash(const FapsCoredumpContext *context){
 	return 0;
 }
 
-int fapsCoredumpIsFullDump(void){
+int _fapsCoredumpIsFullDump(void){
 
 	SceIoStat stat;
 	int res, val;
@@ -130,4 +113,32 @@ int fapsCoredumpIsFullDump(void){
 	res = (ksceIoGetstat("ux0:data/faps-coredump-fulldump-flag", &stat) == 0) ? 1 : 0;
 
 	return res;
+}
+
+int fapsCoredumpIsTargetDump(const FapsCoredumpContext *context, int target_level){
+
+	if(context->dump_level >= target_level)
+		return 1;
+
+	return 0;
+}
+
+int fapsCoredumpIsMiniDump(const FapsCoredumpContext *context){
+	return fapsCoredumpIsTargetDump(context, 0);
+}
+
+int fapsCoredumpIsLittleDump(const FapsCoredumpContext *context){
+	return fapsCoredumpIsTargetDump(context, 1);
+}
+
+int fapsCoredumpIsNormalDump(const FapsCoredumpContext *context){
+	return fapsCoredumpIsTargetDump(context, 2);
+}
+
+int fapsCoredumpIsManyDump(const FapsCoredumpContext *context){
+	return fapsCoredumpIsTargetDump(context, 3);
+}
+
+int fapsCoredumpIsFullDump(const FapsCoredumpContext *context){
+	return fapsCoredumpIsTargetDump(context, 4);
 }

@@ -12,6 +12,7 @@
 #include "utility.h"
 #include "log.h"
 #include "coredump_func.h"
+#include "modulemgr_internal.h"
 
 extern SceUID mutex_uid;
 
@@ -117,6 +118,16 @@ const FapsCoredumpDumpFunc dump_func_list[] = {
 		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
 	},
 	{
+		.func = fapsCoredumpCreateModuleImportYml,
+		.name = "MODULE_IMPORT_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
+	},
+	{
+		.func = fapsCoredumpCreateModuleExportYml,
+		.name = "MODULE_EXPORT_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
+	},
+	{
 		.func = fapsUpdateMemBlockInfo,
 		.name = "MEMBLOCK_UPDATE",
 		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_NORMAL
@@ -209,7 +220,9 @@ int fapsCoredumpTrigger(FapsCoredumpContext *context){
 	time_s = ksceKernelGetSystemTimeWide();
 
 	is_skip = 0; // TODO
-	is_fulldump = fapsCoredumpIsFullDump();
+	is_fulldump = _fapsCoredumpIsFullDump();
+
+	context->dump_level = 3 + is_fulldump;
 
 	for(int i=0;i<FAPS_COREDUMP_DUMP_FUNC_NUMBER;i++){
 		context->update_func(context->task_id, context->pid, (i * 100) / FAPS_COREDUMP_DUMP_FUNC_NUMBER);
@@ -224,17 +237,32 @@ int fapsCoredumpTrigger(FapsCoredumpContext *context){
 				continue;
 		}
 
+
+
+		SceInt64 ftime_s, ftime_e;
+
+		ftime_s = ksceKernelGetSystemTimeWide();
+
 		if(dump_func_list[i].func == NULL){
 			res = 0;
 		}else{
 			res = dump_func_list[i].func(context);
 		}
 
+		ftime_e = ksceKernelGetSystemTimeWide();
+
+		ksceDebugPrintf("%d:[faps-coredump] %-32s %10lld [usec]\n", cpu, dump_func_list[i].name, (SceUInt64)(ftime_e - ftime_s));
+
 		if(res < 0){
-			ksceDebugPrintf("%d:[faps-coredump] failed function (%s result=0x%X)\n", cpu, dump_func_list[i].func, res);
+			ksceDebugPrintf("%d:[faps-coredump] failed function (%s result=0x%X)\n", cpu, dump_func_list[i].name, res);
 
 			if((flag & FAPS_COREDUMP_FUNC_FLAG_FORCED) != 0)
 				is_skip = 1;
+		}
+
+		if(LogIsOpened() != 0){
+			LogClose();
+			ksceDebugPrintf("%d:[faps-coredump] Previously opened Log is not closed. in %s\n", cpu, dump_func_list[i].name);
 		}
 	}
 

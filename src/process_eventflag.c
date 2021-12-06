@@ -21,12 +21,6 @@ int fapsCreateProcessEventflagInfo(FapsCoredumpContext *context){
 	SceSize number;
 	SceUID *evfids;
 
-	if(LogIsOpened() != 0){
-		ksceDebugPrintf("[%-7s] Previously opened Log is not closed. in %s\n", "error", __FUNCTION__);
-		LogClose();
-		return -1;
-	}
-
 	pSceUIDEventFlagClass = NULL;
 	number = 0;
 	evfids = context->uid_pool;

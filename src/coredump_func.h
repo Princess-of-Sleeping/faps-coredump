@@ -30,6 +30,8 @@ int fapsCoredumpInitProcessModule(FapsCoredumpContext *context);
 int fapsCoredumpCreateModulesInfo(FapsCoredumpContext *context);
 int fapsCoredumpCreateModuleSegmentDump(FapsCoredumpContext *context);
 int fapsCoredumpCreateModuleNonlinkedInfo(FapsCoredumpContext *context);
+int fapsCoredumpCreateModuleImportYml(FapsCoredumpContext *context);
+int fapsCoredumpCreateModuleExportYml(FapsCoredumpContext *context);
 
 int fapsCoredumpCreateProcessScreenShot(FapsCoredumpContext *context);
 int fapsCreateProcessThreadInfo(FapsCoredumpContext *context);

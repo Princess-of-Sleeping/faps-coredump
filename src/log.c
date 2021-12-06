@@ -8,23 +8,59 @@
 #include <psp2kern/io/fcntl.h>
 #include "log.h"
 
-SceUID log_fd = 0;
-SceSize log_pos = 0;
-char log_buff[0x1000] __attribute__((aligned(0x40)));
+typedef void (* SceKernelVsnprintfCallback)(void *argp, int ch);
+
+int __vsnprintf_internal(SceKernelVsnprintfCallback cb, void *argp, const char *fmt, va_list list);
+
+typedef struct FapsLogWriteParam {
+	char *log_buffer;
+	int log_buffer_size;
+	int log_current_pos;
+	SceUID fd;
+} FapsLogWriteParam;
+
+#define FAPS_COREDUMP_LOG_BUFFER_SIZE (0x1000)
+
+FapsLogWriteParam log_write_param;
+char log_buffer[FAPS_COREDUMP_LOG_BUFFER_SIZE] __attribute__((aligned(0x40)));
+
+void fapsCoredumpLogWriteInternal(void *argp, int ch){
+
+	if(ch < 0x200){
+
+		FapsLogWriteParam *param = argp;
+
+		char *log_buffer = param->log_buffer;
+		int log_current_pos = param->log_current_pos;
+
+		if(log_current_pos == param->log_buffer_size){
+			ksceIoWrite(param->fd, log_buffer, param->log_buffer_size);
+			log_current_pos = 0;
+		}
+
+		log_buffer[log_current_pos] = ch;
+		param->log_current_pos = log_current_pos + 1;
+	}
+
+	return;
+}
 
 int LogIsOpened(void){
-
-	if(log_fd < 0)
-		return 0;
-
-	return (log_fd == 0) ? 0 : 1;
+	return (log_write_param.fd == 0) ? 0 : 1;
 }
 
 int LogOpen(const char *path){
 
-	if(log_fd == 0){
-		log_fd = ksceIoOpen(path, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0666);
-		log_pos = 0;
+	if(LogIsOpened() == 0){
+		SceUID fd = ksceIoOpen(path, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0666);
+
+		log_write_param.log_buffer      = log_buffer;
+		log_write_param.log_buffer_size = FAPS_COREDUMP_LOG_BUFFER_SIZE;
+		log_write_param.log_current_pos = 0;
+		log_write_param.fd = (fd < 0) ? 0 : fd;
+
+		if(fd < 0)
+			return fd;
 	}else{
 		return -1;
 	}
@@ -35,39 +71,26 @@ int LogOpen(const char *path){
 int LogWrite(const char *fmt, ...){
 
 	va_list args;
-	int len;
-	char string[0x200];
 
-	if(log_fd > 0){
-		memset(string, 0, sizeof(string));
+	if(LogIsOpened() == 0)
+		return -1;
 
-		va_start(args, fmt);
-		len = vsnprintf(string, sizeof(string) - 1, fmt, args);
-		va_end(args);
-
-		if((SceSize)(log_pos + len) >= sizeof(log_buff)){
-			ksceIoWrite(log_fd, log_buff, log_pos);
-			memset(log_buff, 0, log_pos);
-			log_pos = 0;
-		}
-
-		memcpy(&log_buff[log_pos], string, len);
-		log_pos += len;
-	}
+	va_start(args, fmt);
+	__vsnprintf_internal(fapsCoredumpLogWriteInternal, &log_write_param, fmt, args);
+	va_end(args);
 
 	return 0;
 }
 
 int LogClose(void){
-	if(log_fd > 0){
-		if(log_pos != 0){
-			ksceIoWrite(log_fd, log_buff, log_pos);
-			memset(log_buff, 0, log_pos);
-			log_pos = 0;
+	if(LogIsOpened() != 0){
+		if(log_write_param.log_current_pos != 0){
+			ksceIoWrite(log_write_param.fd, log_write_param.log_buffer, log_write_param.log_current_pos);
 		}
 
-		ksceIoClose(log_fd);
-		log_fd = 0;
+		ksceIoClose(log_write_param.fd);
+		log_write_param.fd = 0;
 	}
+
 	return 0;
 }

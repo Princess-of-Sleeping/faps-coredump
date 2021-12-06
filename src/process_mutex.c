@@ -20,12 +20,6 @@ int fapsCreateProcessMutexInfo(FapsCoredumpContext *context){
 	SceUID *mtxids;
 	SceSize number;
 
-	if(LogIsOpened() != 0){
-		ksceDebugPrintf("[error] Previously opened Log is not closed. in %s\n", __FUNCTION__);
-		LogClose();
-		return -1;
-	}
-
 	pSceUIDMutexClass = NULL;
 	mtxids = context->uid_pool;
 	number = 0;

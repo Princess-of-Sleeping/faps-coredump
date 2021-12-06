@@ -21,12 +21,6 @@ int fapsCreateProcessLwCondInfo(FapsCoredumpContext *context){
 	SceUID *condids;
 	SceSize number;
 
-	if(LogIsOpened() != 0){
-		ksceDebugPrintf("[%-7s] Previously opened Log is not closed. in %s\n", "error", __FUNCTION__);
-		LogClose();
-		return -1;
-	}
-
 	pSceUIDLwCondClass = NULL;
 	condids = context->uid_pool;
 	number = 0;

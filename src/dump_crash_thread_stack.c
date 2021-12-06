@@ -30,7 +30,7 @@ int fapsCoredumpCreateCrashThreadStackDump(FapsCoredumpContext *context){
 	context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
 	snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s", context->path, "crash_thread_stack.bin");
 
-	res = write_file_user(context->pid, context->temp, stack, stackSize);
+	res = write_file_proc(context->pid, context->temp, stack, stackSize);
 	if(res < 0)
 		return res;
 

@@ -6,18 +6,13 @@
 #include <psp2kern/types.h>
 #include <psp2kern/kernel/sysmem.h>
 #include <psp2kern/kernel/sysclib.h>
+#include <psp2kern/kernel/utils.h>
 #include "types.h"
 #include "log.h"
 #include "utility.h"
 #include "coredump_func.h"
 
 int fapsCoredumpCreateSummary(FapsCoredumpContext *context){
-
-	if(LogIsOpened() != 0){
-		ksceDebugPrintf("[error] Previously opened Log is not closed. in %s\n", __FUNCTION__);
-		LogClose();
-		return -1;
-	}
 
 	context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
 	snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s", context->path, "summary.txt");

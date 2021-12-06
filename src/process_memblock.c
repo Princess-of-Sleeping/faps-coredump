@@ -108,12 +108,6 @@ int fapsCreateMemBlockDump(FapsCoredumpContext *context){
 	SceUID fd, memid_kern;
 	SceKernelMemBlockInfoEx mem_info;
 
-	if(LogIsOpened() != 0){
-		ksceDebugPrintf("[error] Previously opened Log is not closed. in %s\n", __FUNCTION__);
-		LogClose();
-		return -1;
-	}
-
 	ElfEntryInfo *pElfEntryInfo;
 
 	// size = sizeof(ElfEntryInfo) * 2048
@@ -236,12 +230,6 @@ int fapsCreateMemBlockInfo(FapsCoredumpContext *context){
 	SceUID memid_kern;
 	SceKernelMemBlockInfoEx mem_info;
 	char name[0x20];
-
-	if(LogIsOpened() != 0){
-		ksceDebugPrintf("[error] Previously opened Log is not closed. in %s\n", __FUNCTION__);
-		LogClose();
-		return -1;
-	}
 
 	context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
 	snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s", context->path, "memblock_info.txt");

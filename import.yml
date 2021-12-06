@@ -1,6 +1,14 @@
 version: 2
 firmware: 3.60
 modules:
+  SceSysmem:
+    nid: 0x3380B323
+    libraries:
+      SceSysclibForDriver:
+        kernel: false
+        nid: 0x7EE45391
+        functions:
+          __vsnprintf_internal: 0xE38E7605
   SceKernelThreadMgr:
     nid: 0xF46ED7B2
     libraries:

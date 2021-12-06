@@ -24,7 +24,7 @@ typedef struct FapsCoredumpContext {
 	SceUID thid;
 
 	SceKernelCoredumpStateUpdateCallback update_func;
-	int pad_0x14;
+	int dump_level;
 	int pad_0x18;
 	int pad_0x1C;
 

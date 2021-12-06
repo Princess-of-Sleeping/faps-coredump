@@ -10,6 +10,7 @@
 #include "log.h"
 #include "utility.h"
 #include "modulemgr_internal.h"
+#include "process_mapping.h"
 #include "coredump_func.h"
 #include "sysmem_types.h"
 
@@ -73,7 +74,7 @@ int write_membase_base_list(FapsCoredumpContext *context, SceUID memblk_id){
 
 	LogWrite("\t[%-31s]\n", name);
 	LogWrite("\tGUID : 0x%X\n", memblk_id);
-	LogWrite("\ttype : 0x%08X (\n", mem_info.details.type);
+	LogWrite("\ttype : 0x%08X (", mem_info.details.type);
 
 	SceUInt32 memtype = mem_info.details.type;
 
@@ -122,12 +123,6 @@ int fapsCoredumpCreateModulesInfo(FapsCoredumpContext *context){
 	if(context->process_module_info == NULL)
 		return -1;
 
-	if(LogIsOpened() != 0){
-		ksceDebugPrintf("[error] Previously opened Log is not closed. in %s\n", __FUNCTION__);
-		LogClose();
-		return -1;
-	}
-
 	context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
 	snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s", context->path, "modules_info.txt");
 	if(LogOpen(context->temp) < 0)
@@ -158,34 +153,32 @@ int fapsCoredumpCreateModulesInfo(FapsCoredumpContext *context){
 			);
 		}
 
-		LogWrite("fingerprint: 0x%08X\n", module_info->module_nid);
-		LogWrite("flags      : 0x%08X\n", module_info->flags);
-		LogWrite("modid(user): 0x%08X\n", module_info->modid_user);
-		LogWrite("modid(kern): 0x%08X\n", module_info->modid_kernel);
-		LogWrite(
-			"text params:0x%02X, 0x%02X, segment align:0x%X",
-			module_info->segments[0].perms[0], module_info->segments[0].perms[3],
-			(1 << module_info->segments[0].perms[2])
-		);
-		if(module_info->segments[0].perms[1] != 0){
+		SceUInt32 sdk = module_info->version;
+
+		LogWrite("module id      : 0x%08X/0x%08X\n", module_info->modid_user, module_info->modid_kernel);
+		LogWrite("path           : %s\n", module_info->path);
+		LogWrite("version        : %X.%X\n", module_info->major, module_info->minor);
+		LogWrite("SDK            : %X.%03X.%03X\n", (sdk >> 24) & 0xFF, (sdk >> 12) & 0xFFF, sdk & 0xFFF);
+		LogWrite("attr           : 0x%04X\n", module_info->attr);
+		LogWrite("fingerprint    : 0x%08X\n", module_info->fingerprint);
+		LogWrite("library export : %d\n", module_info->lib_export_num);
+		LogWrite("library import : %d\n", module_info->lib_import_num);
+
+		LogWrite("flags          : 0x%04X\n", module_info->flags);
+		LogWrite("text params    : 0x%02X, align:0x%X", module_info->segments[0].perms[0], (1 << module_info->segments[0].perms[2]));
+		if(module_info->segments[0].perms[1] != 0)
 			LogWrite(", extra memory size:0x%X", (module_info->segments[0].perms[1] << 0xC));
-		}
 		LogWrite("\n");
 
-		LogWrite(
-			"data params:0x%02X, 0x%02X, segment align:0x%X",
-			module_info->segments[1].perms[0], module_info->segments[1].perms[3],
-			(1 << module_info->segments[1].perms[2])
-		);
-		if(module_info->segments[1].perms[1] != 0){
+		LogWrite("data params    : 0x%02X, align:0x%X", module_info->segments[1].perms[0], (1 << module_info->segments[1].perms[2]));
+		if(module_info->segments[1].perms[1] != 0)
 			LogWrite(", extra memory size:0x%X", (module_info->segments[1].perms[1] << 0xC));
-		}
 		LogWrite("\n");
 
-		LogWrite("path : %s\n", module_info->path);
+		// LogWrite("first import   : %s\n", module_info->data_0x60->type2.libname);
 		LogWrite("\n");
 
-		if(fapsCoredumpIsFullDump() != 0){
+		if(fapsCoredumpIsFullDump(context) != 0){
 			LogWrite("module membase list\n");
 			write_membase_base_list(context, module_info->segments[0].memblk_id);
 			write_membase_base_list(context, module_info->segments[1].memblk_id);
@@ -230,7 +223,7 @@ int fapsCoredumpCreateModuleSegmentDump(FapsCoredumpContext *context){
 				if(ksceIoGetstat(context->temp, &stat) == 0){
 					ksceDebugPrintf("[warning]:Skip because dump of the same module already exists -> (%s)\n", module_info->module_name);
 				}else{
-					write_file_user(context->pid, context->temp, module_info->segments[i].vaddr, module_info->segments[i].memsz);
+					write_file_proc(module_info->pid, context->temp, module_info->segments[i].vaddr, module_info->segments[i].memsz);
 				}
 			}
 		}
@@ -244,13 +237,7 @@ int fapsCoredumpCreateModuleNonlinkedInfo(FapsCoredumpContext *context){
 	if(context->process_module_info == NULL)
 		return -1;
 
-	if(LogIsOpened() != 0){
-		ksceDebugPrintf("[error] Previously opened Log is not closed. in %s\n", __FUNCTION__);
-		LogClose();
-		return -1;
-	}
-
-	SceModuleNonlinkedInfo *pNonlinkedInfo = context->process_module_info->nonlinked_info;
+	SceModuleImportInfo *pNonlinkedInfo = context->process_module_info->nonlinked_info;
 
 	if(pNonlinkedInfo == NULL){
 		ksceDebugPrintf("[%-7s] not has nonlinked to this process.\n", "info");
@@ -259,10 +246,8 @@ int fapsCoredumpCreateModuleNonlinkedInfo(FapsCoredumpContext *context){
 
 	context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
 	snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s", context->path, "module_nonlinked_info.txt");
-	if(LogOpen(context->temp) < 0){
-		ksceDebugPrintf("[error] Log open failed. in %s\n", "fapsCreateModuleNonlinkedInfo");
+	if(LogOpen(context->temp) < 0)
 		return -1;
-	}
 
 	LogWrite("# module nonlinked info\n");
 
@@ -287,6 +272,180 @@ int fapsCoredumpCreateModuleNonlinkedInfo(FapsCoredumpContext *context){
 	}
 
 	LogClose();
+
+	return 0;
+}
+
+int fapsCoredumpCreateModuleImportYml(FapsCoredumpContext *context){
+
+	int res;
+	SceModuleInfoInternal *pModuleInfo;
+
+	if(context->process_module_info == NULL)
+		return -1;
+
+	context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
+	snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s", context->path, "module_import_yml");
+
+	res = ksceIoMkdir(context->temp, 0666);
+	if(res < 0)
+		return res;
+
+	pModuleInfo = context->process_module_info->module_info;
+
+	while(pModuleInfo != NULL){
+
+		context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
+		snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s/%s.yml", context->path, "module_import_yml", pModuleInfo->module_name);
+
+		LogOpen(context->temp);
+
+		LogWrite("version: %d\n", 2);
+
+		SceUInt8 version_upper, version_lower;
+		SceSize ent_num;
+		SceNID *pNIDTable;
+		SceModuleImport *pImportInfo;
+		FapsProcessMappingContext mapping_context;
+
+		version_upper = (pModuleInfo->version >> 24) & 0xFF;
+		version_lower = (pModuleInfo->version >> 16) & 0xFF;
+
+		LogWrite("firmware: %X.%02X\n", version_upper, version_lower);
+		LogWrite("modules:\n");
+		LogWrite("  %s:\n", pModuleInfo->module_name);
+		LogWrite("    nid: 0x%08X\n", pModuleInfo->fingerprint);
+		LogWrite("    libraries:\n");
+
+		for(int i=0;i<pModuleInfo->lib_import_num;i++){
+
+			pImportInfo = pModuleInfo->import_list[i].pImportInfo;
+
+			LogWrite("      %s:\n", pImportInfo->type2.libname);
+			LogWrite("        version: 0x%04X\n", pImportInfo->type2.version);
+			LogWrite("        flags: 0x%04X\n", pImportInfo->type2.flags);
+			LogWrite("        nid: 0x%08X\n", pImportInfo->type2.libnid);
+
+			ent_num = pImportInfo->type2.entry_num_function;
+			if(ent_num > 0){
+				res = faps_process_mapping_map(&mapping_context, pModuleInfo->pid, (void **)&pNIDTable, pImportInfo->type2.table_func_nid, ent_num * sizeof(SceNID));
+				if(res >= 0){
+					LogWrite("        function:\n");
+					for(int i=0;i<ent_num;i++){
+						snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s_%08X", pImportInfo->type2.libname, pNIDTable[i]);
+						LogWrite("          %s: 0x%08X\n", context->temp, pNIDTable[i]);
+					}
+					faps_process_mapping_unmap(&mapping_context);
+				}
+			}
+
+			ent_num = pImportInfo->type2.entry_num_variable;
+			if(ent_num > 0){
+				res = faps_process_mapping_map(&mapping_context, pModuleInfo->pid, (void **)&pNIDTable, pImportInfo->type2.table_vars_nid, ent_num * sizeof(SceNID));
+				if(res >= 0){
+					LogWrite("        variable:\n");
+					for(int i=0;i<ent_num;i++){
+						snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s_%08X", pImportInfo->type2.libname, pNIDTable[i]);
+						LogWrite("          %s: 0x%08X\n", context->temp, pNIDTable[i]);
+					}
+					faps_process_mapping_unmap(&mapping_context);
+				}
+			}
+		}
+
+		LogClose();
+
+		pModuleInfo = pModuleInfo->next;
+	}
+
+	return 0;
+}
+
+int fapsCoredumpCreateModuleExportYml(FapsCoredumpContext *context){
+
+	int res;
+	SceModuleInfoInternal *pModuleInfo;
+
+	if(context->process_module_info == NULL)
+		return -1;
+
+	context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
+	snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s", context->path, "module_export_yml");
+
+	res = ksceIoMkdir(context->temp, 0666);
+	if(res < 0)
+		return res;
+
+	pModuleInfo = context->process_module_info->module_info;
+
+	while(pModuleInfo != NULL){
+
+		context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
+		snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s/%s.yml", context->path, "module_export_yml", pModuleInfo->module_name);
+
+		LogOpen(context->temp);
+
+		LogWrite("version: %d\n", 2);
+
+		SceUInt8 version_upper, version_lower;
+		SceSize ent_num;
+		SceNID *pNIDTable;
+		FapsProcessMappingContext mapping_context;
+
+		version_upper = (pModuleInfo->version >> 24) & 0xFF;
+		version_lower = (pModuleInfo->version >> 16) & 0xFF;
+
+		LogWrite("firmware: %X.%02X\n", version_upper, version_lower);
+		LogWrite("modules:\n");
+		LogWrite("  %s:\n", pModuleInfo->module_name);
+		LogWrite("    nid: 0x%08X\n", pModuleInfo->fingerprint);
+		LogWrite("    libraries:\n");
+
+		char lib_name[0x100];
+
+		for(int i=0;i<pModuleInfo->lib_export_num;i++){
+
+			SceModuleExport *pExportInfo = &(pModuleInfo->pLibraryInfo->pExportInfo[i]);
+
+			lib_name[sizeof(lib_name) - 1] = 0;
+
+			strncpy(lib_name, (pExportInfo->libname == NULL) ? "noname" : pExportInfo->libname, sizeof(lib_name) - 1);
+
+			LogWrite("      %s:\n", lib_name);
+			LogWrite("        version: 0x%04X\n", pExportInfo->version);
+			LogWrite("        flags: 0x%04X\n", pExportInfo->flags);
+			LogWrite("        nid: 0x%08X\n", pExportInfo->libnid);
+
+			ent_num = (pExportInfo->entry_num_function + pExportInfo->entry_num_variable) * sizeof(SceNID);
+
+			res = faps_process_mapping_map(&mapping_context, pModuleInfo->pid, (void **)&pNIDTable, pExportInfo->table_nid, ent_num);
+			if(res >= 0){
+				ent_num = pExportInfo->entry_num_function;
+				if(ent_num > 0){
+					LogWrite("        function:\n");
+					for(int i=0;i<ent_num;i++){
+						snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s_%08X", lib_name, pNIDTable[i]);
+						LogWrite("          %s: 0x%08X\n", context->temp, pNIDTable[i]);
+					}
+				}
+
+				ent_num = pExportInfo->entry_num_variable;
+				if(ent_num > 0){
+					LogWrite("        variable:\n");
+					for(int i=0;i<ent_num;i++){
+						snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s_%08X", lib_name, pNIDTable[pExportInfo->entry_num_function + i]);
+						LogWrite("          %s: 0x%08X\n", context->temp, pNIDTable[i]);
+					}
+				}
+
+				faps_process_mapping_unmap(&mapping_context);
+			}
+		}
+
+		LogClose();
+
+		pModuleInfo = pModuleInfo->next;
+	}
 
 	return 0;
 }

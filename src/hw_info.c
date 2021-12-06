@@ -14,12 +14,6 @@
 
 int fapsCoredumpCreateHwInfo(FapsCoredumpContext *context){
 
-	if(LogIsOpened() != 0){
-		ksceDebugPrintf("[%-7s] Previously opened Log is not closed. in %s\n", "error", __FUNCTION__);
-		LogClose();
-		return -1;
-	}
-
 	context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
 	snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s", context->path, "hw_info.txt");
 	if(LogOpen(context->temp) < 0)
