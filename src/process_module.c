@@ -6,6 +6,7 @@
 #include <psp2kern/types.h>
 #include <psp2kern/kernel/sysmem.h>
 #include <psp2kern/kernel/sysclib.h>
+#include <psp2kern/io/fcntl.h>
 #include <psp2kern/io/stat.h>
 #include "log.h"
 #include "utility.h"
@@ -13,6 +14,7 @@
 #include "process_mapping.h"
 #include "coredump_func.h"
 #include "sysmem_types.h"
+#include "elf.h"
 
 extern SceClass *(* _ksceKernelGetUIDMemBlockClass)(void);
 extern SceKernelProcessModuleInfo *(* sceKernelGetProcessModuleInfo)(SceUID pid);
@@ -193,18 +195,33 @@ int fapsCoredumpCreateModulesInfo(FapsCoredumpContext *context){
 int fapsCoredumpCreateModuleSegmentDump(FapsCoredumpContext *context){
 
 	int res;
+	SceUID memid;
+	void *base;
 	SceSize modnum;
 	SceModuleInfoInternal *module_info;
+	Elf32_Ehdr ehdr;
+	ElfEntryInfo elf_ent[2];
+	uint32_t offset;
 
 	if(context->process_module_info == NULL)
 		return -1;
+
+	memid = ksceKernelAllocMemBlock("ZeroFill", 0x1020D006, 0x1000, NULL);
+	if(memid < 0){
+		return memid;
+	}
+
+	ksceKernelGetMemBlockBase(memid, &base);
+
+	memset(base, 0, 0x1000);
 
 	context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
 	snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s", context->path, "module_segments");
 
 	res = ksceIoMkdir(context->temp, 0666);
-	if(res < 0)
-		return res;
+	if(res < 0){
+		goto end;
+	}
 
 	modnum = context->process_module_info->process_module_count;
 
@@ -212,24 +229,85 @@ int fapsCoredumpCreateModuleSegmentDump(FapsCoredumpContext *context){
 		modnum--;
 		module_info = context->module_list[modnum];
 
-		for(int i=0;i<module_info->segments_num;i++){
+		if(module_info->segments_num < 3){
 
-			if(module_info->segments[i].vaddr != NULL){
+			offset = sizeof(Elf32_Ehdr) + module_info->segments_num * sizeof(ElfEntryInfo);
 
-				context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
-				snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s/%s_seg%X.bin", context->path, "module_segments", module_info->module_name, i);
+			for(int i=0;i<module_info->segments_num;i++){
+				offset = ((offset + 0xF) & ~0xF);
+				elf_ent[i].type   = 1;
+				elf_ent[i].vaddr  = (uint32_t)module_info->segments[i].vaddr;
+				elf_ent[i].paddr  = (uint32_t)module_info->segments[i].vaddr;
+				elf_ent[i].filesz = module_info->segments[i].memsz;
+				elf_ent[i].memsz  = module_info->segments[i].memsz;
+				elf_ent[i].flags  = module_info->segments[i].perms[0];
+				elf_ent[i].align  = 1 << module_info->segments[i].perms[2];
 
-				SceIoStat stat;
-				if(ksceIoGetstat(context->temp, &stat) == 0){
-					ksceDebugPrintf("[warning]:Skip because dump of the same module already exists -> (%s)\n", module_info->module_name);
-				}else{
-					write_file_proc(module_info->pid, context->temp, module_info->segments[i].vaddr, module_info->segments[i].memsz);
+				elf_ent[i].offset = (offset + (elf_ent[i].align - 1)) & ~(elf_ent[i].align - 1);
+
+				offset += module_info->segments[i].memsz;
+			}
+
+			memset(&ehdr, 0, sizeof(ehdr));
+
+			ehdr.e_ident[0x0] = 0x7F;
+			ehdr.e_ident[0x1] = 'E';
+			ehdr.e_ident[0x2] = 'L';
+			ehdr.e_ident[0x3] = 'F';
+			ehdr.e_ident[0x4] = 1;
+			ehdr.e_ident[0x5] = 1;
+			ehdr.e_ident[0x6] = 1;
+
+			ehdr.e_type = 4;
+			ehdr.e_machine = 0x28;
+			ehdr.e_version = 1;
+			ehdr.e_entry = 0;
+			ehdr.e_phoff = sizeof(ehdr);
+
+			ehdr.e_shoff     = 0;
+			ehdr.e_flags     = 0x05000000;
+			ehdr.e_ehsize    = sizeof(ehdr);
+			ehdr.e_phentsize = sizeof(ElfEntryInfo);
+			ehdr.e_phnum     = module_info->segments_num;
+			ehdr.e_shentsize = 0;
+
+			ehdr.e_shnum = 0;
+			ehdr.e_shstrndx = 0;
+
+			context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
+			snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s/%s.elf", context->path, "module_segments", module_info->module_name);
+
+			SceUID fd = ksceIoOpen(context->temp, SCE_O_CREAT | SCE_O_TRUNC | SCE_O_WRONLY, 0666);
+			if(fd >= 0){
+				write_file_proc_by_fd(0x10005, fd, &ehdr, sizeof(ehdr));
+				write_file_proc_by_fd(0x10005, fd, elf_ent, sizeof(ElfEntryInfo) * module_info->segments_num);
+
+				offset = sizeof(Elf32_Ehdr) + module_info->segments_num * sizeof(ElfEntryInfo);
+
+				for(int i=0;i<module_info->segments_num;i++){
+
+					if((elf_ent[i].offset - offset) != 0){
+						write_file_proc_by_fd(module_info->pid, fd, base, elf_ent[i].offset - offset);
+					}
+
+					offset = (offset + (elf_ent[i].align - 1)) & ~(elf_ent[i].align - 1);
+
+					write_file_proc_by_fd(module_info->pid, fd, module_info->segments[i].vaddr, module_info->segments[i].memsz);
+
+					offset += module_info->segments[i].memsz;
 				}
+
+				ksceIoClose(fd);
 			}
 		}
 	} while(modnum > 0);
 
-	return 0;
+	res = 0;
+
+end:
+	ksceKernelFreeMemBlock(memid);
+
+	return res;
 }
 
 int fapsCoredumpCreateModuleNonlinkedInfo(FapsCoredumpContext *context){

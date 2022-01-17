@@ -11,7 +11,7 @@ endif()
 project(faps-coredump)
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q -Wall -Os -fno-inline")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q -Wall -O2 -fno-inline")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions")
 
 add_executable(faps-coredump
@@ -75,6 +75,7 @@ vita_create_self(faps-coredump.skprx faps-coredump
   CONFIG exports.yml
   UNSAFE
   STRIPPED
+  REL_OPTIMIZE
 )
 
 vita_create_stubs(stubs faps-coredump ${CMAKE_CURRENT_SOURCE_DIR}/exports.yml KERNEL)
