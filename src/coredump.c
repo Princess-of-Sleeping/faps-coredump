@@ -225,7 +225,9 @@ int fapsCoredumpTrigger(FapsCoredumpContext *context){
 	context->dump_level = 3 + is_fulldump;
 
 	for(int i=0;i<FAPS_COREDUMP_DUMP_FUNC_NUMBER;i++){
-		context->update_func(context->task_id, context->pid, (i * 100) / FAPS_COREDUMP_DUMP_FUNC_NUMBER);
+		if(context->update_func != NULL){
+			context->update_func(context->task_id, context->pid, (i * 100) / FAPS_COREDUMP_DUMP_FUNC_NUMBER);
+		}
 
 		flag = dump_func_list[i].flag;
 
@@ -266,7 +268,9 @@ int fapsCoredumpTrigger(FapsCoredumpContext *context){
 		}
 	}
 
-	context->update_func(context->task_id, context->pid, (FAPS_COREDUMP_DUMP_FUNC_NUMBER * 100) / FAPS_COREDUMP_DUMP_FUNC_NUMBER);
+	if(context->update_func != NULL){
+		context->update_func(context->task_id, context->pid, (FAPS_COREDUMP_DUMP_FUNC_NUMBER * 100) / FAPS_COREDUMP_DUMP_FUNC_NUMBER);
+	}
 
 	time_e = ksceKernelGetSystemTimeWide();
 
