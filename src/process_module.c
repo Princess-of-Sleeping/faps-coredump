@@ -192,6 +192,77 @@ int fapsCoredumpCreateModulesInfo(FapsCoredumpContext *context){
 	return 0;
 }
 
+typedef struct SceModuleEntryPoint { // size is 0x5C-bytes
+	SceUInt16 attr;
+	SceUInt8 minor;
+	SceUInt8 major;
+	char name[27];
+	SceUInt8 type;
+	void *gp_value;
+	SceUInt32 libent_top;
+	SceUInt32 libent_btm;
+	SceUInt32 libstub_top;
+	SceUInt32 libstub_btm;
+	SceUInt32 fingerpint;
+	int unk_0x38;
+	int unk_0x3C;
+	int unk_0x40;
+	SceUInt32 module_start;
+	SceUInt32 module_stop;
+	SceUInt32 exidx_start;
+	SceUInt32 exidx_end;
+	SceUInt32 extab_start;
+	SceUInt32 extab_end;
+} SceModuleEntryPoint;
+
+int search_module_entry_point(SceUID pid, SceModuleInfoInternal *module_info, SceUInt32 *entry){
+
+	void *ent, *curr_ptr;
+	char module_name[0x1C];
+	SceModuleEntryPoint entryPoint;
+
+	if(module_info->libent_top != NULL){ // get module entry point
+
+		SceSize remain = module_info->libent_top - module_info->segments[0].vaddr;
+		while(remain >= (0x24 + 4)){
+			remain -= 4;
+
+			curr_ptr = module_info->segments[0].vaddr + remain;
+
+			ksceKernelProcMemcpyFromUser(pid, &ent, curr_ptr, sizeof(ent));
+
+			if(ent == (void *)(module_info->libent_top - module_info->segments[0].vaddr)){
+
+				ksceKernelProcMemcpyFromUser(pid, &entryPoint, curr_ptr - 0x24, sizeof(entryPoint));
+
+				if(entryPoint.attr != module_info->attr)
+					continue;
+
+				if(entryPoint.minor != module_info->minor)
+					continue;
+
+				if(entryPoint.major != module_info->major)
+					continue;
+
+				strncpy(module_name, module_info->module_name, 0x1B);
+
+				if(memcmp(module_name, entryPoint.name, 0x1B) != 0)
+					continue;
+
+				if(entryPoint.type != 6)
+					continue;
+
+				if(entry != NULL)
+					*entry = remain - 0x24;
+
+				return 0;
+			}
+		}
+	}
+
+	return -1;
+}
+
 int fapsCoredumpCreateModuleSegmentDump(FapsCoredumpContext *context){
 
 	int res;
@@ -231,6 +302,14 @@ int fapsCoredumpCreateModuleSegmentDump(FapsCoredumpContext *context){
 
 		if(module_info->segments_num < 3){
 
+			uint32_t entry = 0xDEADBEEF;
+
+			res = search_module_entry_point(context->pid, module_info, &entry);
+			if(res < 0 || entry == 0xDEADBEEF){
+				ksceDebugPrintf("Not found entry point\n");
+				entry = ~0;
+			}
+
 			offset = sizeof(Elf32_Ehdr) + module_info->segments_num * sizeof(ElfEntryInfo);
 
 			for(int i=0;i<module_info->segments_num;i++){
@@ -245,7 +324,7 @@ int fapsCoredumpCreateModuleSegmentDump(FapsCoredumpContext *context){
 
 				elf_ent[i].offset = (offset + (elf_ent[i].align - 1)) & ~(elf_ent[i].align - 1);
 
-				offset += module_info->segments[i].memsz;
+				offset = elf_ent[i].offset + module_info->segments[i].memsz;
 			}
 
 			memset(&ehdr, 0, sizeof(ehdr));
@@ -261,7 +340,7 @@ int fapsCoredumpCreateModuleSegmentDump(FapsCoredumpContext *context){
 			ehdr.e_type = 4;
 			ehdr.e_machine = 0x28;
 			ehdr.e_version = 1;
-			ehdr.e_entry = 0;
+			ehdr.e_entry = entry;
 			ehdr.e_phoff = sizeof(ehdr);
 
 			ehdr.e_shoff     = 0;
