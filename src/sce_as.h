@@ -91,6 +91,49 @@ typedef struct SceKernelPhyMemPart { // size is 0xAC
 	char name[0x20];
 } SceKernelPhyMemPart;
 
+typedef struct SceKernelProcessTTBR { // size is 0x14-bytes
+	SceUInt32 unk_0x00;
+	SceUIntPtr *pTTBR0;
+	SceUIntPtr *pTTBR1;
+	SceSize ttbr0_mgmt_size;
+	SceSize ttbr1_mgmt_size;
+} SceKernelProcessTTBR;
+
+
+typedef struct SceKernelPTV { // size is 0x40-bytes
+	SceUInt32 unk_0x00;
+	SceInt32  unk_0x04;
+	SceUInt32 unk_0x08;
+	SceUInt32 unk_0x0C; // some flags
+	SceUInt32 unk_0x10; // maybe some number
+	SceUInt32 targetPA;
+	SceUInt32 *pSecondLevelDescription;
+	SceUInt32 unk_0x1C;
+	SceUInt32 secondLevelDescriptionPA;
+	SceUInt32 unk_0x24;
+	void *unk_0x28;
+	SceUInt32 unk_0x2C;
+	SceInt32  unk_0x30;
+	SceInt32  unk_0x34;
+	SceInt32  unk_0x38;
+	SceUInt32 magic;
+} SceKernelPTV;
+
+typedef struct SceKernelPTVVector { // size is 0x4000-bytes
+	SceUInt32 vector[0x1000];
+} SceKernelPTVVector;
+
+typedef struct SceKernelAddressSpaceMMUContext { // size is 0x28-bytes
+	SceKernelProcessContext cpu_ctx;
+	SceKernelProcessTTBR *pProcessTTBR;
+	SceKernelPTVVector *unk_0x10;
+	int unk_0x14;
+	int unk_0x18;
+	int unk_0x1C;
+	int unk_0x20;
+	int unk_0x24;
+} SceKernelAddressSpaceMMUContext;
+
 typedef struct SceKernelAddressSpaceInfo { // size is 0x170
 	int unk_0x00;
 	SceClass *pASClass;
@@ -98,7 +141,7 @@ typedef struct SceKernelAddressSpaceInfo { // size is 0x170
 	int unk_0x0C;
 	int flag;		// kernel:0x30000002, user:0x10000001
 	SceUID pid;
-	SceKernelProcessContext *unk_0x18;
+	SceKernelAddressSpaceMMUContext *unk_0x18;
 	SceKernelProcASInfo *pProcAS[0x20];
 	SceUID unk_uid[0x20];	// AS Info uid?
 	int unk_0x11C;
