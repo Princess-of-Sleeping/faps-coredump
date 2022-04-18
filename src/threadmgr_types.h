@@ -275,7 +275,7 @@ typedef struct SceKernelThreadObject { // size is 0x1B0-bytes
 	int data_0x110;
 	int data_0x114;
 	int data_0x118;
-	SceKernelAddressSpaceInfo *ptr_0x11C;
+	SceUIDAddressSpaceObject *ptr_0x11C;
 	void *ptr_0x120;
 	SceUID processId2;
 	int data_0x128;

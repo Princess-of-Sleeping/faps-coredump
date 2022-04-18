@@ -29,8 +29,8 @@ typedef struct SceMemBlockObj {
 	void *vaddr;
 	SceSize size; // non-aligned
 	int unk_20;
-	SceKernelProcASInfo *unk_24;
-	SceKernelPhyMemPart *unk_28;
+	SceUIDPartitionObject *unk_24;
+	SceUIDPhyMemPartObject *unk_28;
 	void *unk_2C;
 	SceKernelMemBlockAddressTree *address_tree;
 	int unk_34;

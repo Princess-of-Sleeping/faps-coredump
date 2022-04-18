@@ -35,7 +35,7 @@ FapsCoredumpContext coredump_context;
 
 int (* sceKernelCoredumpStateFinish)(int task_id, SceUID pid, int error_code, const char *path, SceSize path_len, int a6);
 
-int (* sceKernelSysrootPIDtoAddressSpaceCB)(SceUID pid, SceKernelAddressSpaceInfo **ppInfo);
+int (* sceKernelSysrootPIDtoAddressSpaceCB)(SceUID pid, SceUIDAddressSpaceObject **ppInfo);
 SceKernelProcessModuleInfo *(* sceKernelGetProcessModuleInfo)(SceUID pid);
 
 SceClass *(* _ksceKernelGetUIDMemBlockClass)(void);
@@ -47,8 +47,8 @@ int (* _kscePUIDGetUIDVectorByClass)(SceUID pid, SceClass *cls, int vis_level, S
 int (* _ksceKernelGetModuleInfo)(SceUID pid, SceUID modid, SceKernelModuleInfo *info);
 int (* _ksceKernelGetModuleIdByAddr)(SceUID pid, const void *a2);
 
-SceKernelPhyMemPart *(* sceKernelGetPhyPartKernel)(void);
-int (* sceKernelGetPhyMemPartInfoCore)(SceKernelPhyMemPart *a1, SceSysmemAddressSpaceInfo *pInfo);
+SceUIDPhyMemPartObject *(* sceKernelGetPhyPartKernel)(void);
+int (* sceKernelGetPhyMemPartInfoCore)(SceUIDPhyMemPartObject *a1, SceSysmemAddressSpaceInfo *pInfo);
 
 int (* sceCoredumpGetCrashThreadCause)(SceUID thid, const SceCoredumpCrashCauseParam *param, SceCoredumpCrashCauseResult *result);
 void (* sceKernelExcpmgrGetCpsrStrings)(char *dst, SceUInt32 cpsr);

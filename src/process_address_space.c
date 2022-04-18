@@ -11,8 +11,8 @@
 #include "sce_as.h"
 #include "coredump_func.h"
 
-extern int (* sceKernelGetPhyMemPartInfoCore)(SceKernelPhyMemPart *a1, SceSysmemAddressSpaceInfo *pInfo);
-extern int (* sceKernelSysrootPIDtoAddressSpaceCB)(SceUID pid, SceKernelAddressSpaceInfo **ppInfo);
+extern int (* sceKernelGetPhyMemPartInfoCore)(SceUIDPhyMemPartObject *a1, SceSysmemAddressSpaceInfo *pInfo);
+extern int (* sceKernelSysrootPIDtoAddressSpaceCB)(SceUID pid, SceUIDAddressSpaceObject **ppInfo);
 
 /*
  *    AP | Privilege | User | Description
@@ -140,7 +140,7 @@ int write_ttbr(SceKernelPTVVector *p, SceUInt32 i, SceUIntPtr v){
 	return 0;
 }
 
-int _fapsCoredumpCreateTTBR1Dump(FapsCoredumpContext *context, SceKernelAddressSpaceInfo *pAsInfoProc){
+int _fapsCoredumpCreateTTBR1Dump(FapsCoredumpContext *context, SceUIDAddressSpaceObject *pAsInfoProc){
 
 	context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
 	snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s", context->path, "ttbr_info.txt");
@@ -167,7 +167,7 @@ int _fapsCoredumpCreateTTBR1Dump(FapsCoredumpContext *context, SceKernelAddressS
 	return 0;
 }
 
-int write_as_phymem_part(SceKernelPhyMemPart *a1){
+int write_as_phymem_part(SceUIDPhyMemPartObject *a1){
 
 	int res;
 
@@ -193,7 +193,7 @@ int write_as_phymem_part(SceKernelPhyMemPart *a1){
 int fapsCoredumpCreateAsInfoDump(FapsCoredumpContext *context){
 
 	int res;
-	SceKernelAddressSpaceInfo *pAsInfoProc;
+	SceUIDAddressSpaceObject *pAsInfoProc;
 
 	res = sceKernelSysrootPIDtoAddressSpaceCB(context->pid, &pAsInfoProc);
 	if(res < 0){
@@ -223,11 +223,11 @@ int fapsCoredumpCreateAsInfoDump(FapsCoredumpContext *context){
 
 	for(int i=0;i<0x20;i++){
 		if(pAsInfoProc->pProcAS[i] != NULL){
-			LogWrite("\t[%-27s]\n", pAsInfoProc->pProcAS[i]->name);
-			LogWrite("\tbase:0x%08X, size:0x%08X\n\n", pAsInfoProc->pProcAS[i]->base_vaddr, pAsInfoProc->pProcAS[i]->base_size);
+			LogWrite("\t[%-27s]\n", pAsInfoProc->pProcAS[i]->tiny.name);
+			LogWrite("\tbase:0x%08X, size:0x%08X\n\n", pAsInfoProc->pProcAS[i]->tiny.base_vaddr, pAsInfoProc->pProcAS[i]->tiny.base_size);
 
 			SceObjectBase *pObj;
-			int res = ksceGUIDReferObjectWithClass(pAsInfoProc->unk_uid[i], pAsInfoProc->pProcAS[i]->unk_0x04, &pObj);
+			int res = ksceGUIDReferObjectWithClass(pAsInfoProc->unk_uid[i], pAsInfoProc->pProcAS[i]->tiny.pClass, &pObj);
 			if(res >= 0){
 				ksceGUIDReleaseObject(pAsInfoProc->unk_uid[i]);
 			}
