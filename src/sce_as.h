@@ -9,6 +9,8 @@
 #include <psp2kern/types.h>
 #include <psp2kern/kernel/sysmem.h>
 
+typedef struct SceUIDAddressSpaceObject SceUIDAddressSpaceObject;
+
 typedef struct SceUIDTinyPartitionObject { // size is 0x38-bytes
 	void *pUserdata;
 	SceClass *pClass;
@@ -19,7 +21,7 @@ typedef struct SceUIDTinyPartitionObject { // size is 0x38-bytes
 	SceSize base_size;
 	void *unk_0x1C; // proc cpu ctx
 	int unk_0x20; // some flag?
-	int unk_0x24; // size?
+	SceSize remain_size;
 	int unk_0x28; // -1
 	int unk_0x2C;
 	int unk_0x30; // -1
@@ -31,18 +33,18 @@ typedef struct SceUIDPartitionObject { // size is 0x80-bytes
 	int unk_0x38;
 	int unk_0x3C;
 	int unk_0x40;
-	int unk_0x44;
+	void *unk_0x44;
 	int unk_0x48;
 	int unk_0x4C; // ex:8
 	int unk_0x50;
-	void *unk_0x54; // SceKernelAddressSpaceInfo ptr
+	SceUIDAddressSpaceObject *unk_0x54;
 	int unk_0x58;
 	int unk_0x5C;
-	int unk_0x60; // -1
+	int unk_0x60; // some bit mask
 	SceUID pid;
-	SceUID unk_0x68;
+	SceUID this_object_guid;
 	int unk_0x6C;
-	int unk_0x70;
+	void *unk_0x70;
 	int unk_0x74;
 	int unk_0x78;
 	int unk_0x7C;
