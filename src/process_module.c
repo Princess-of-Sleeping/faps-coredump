@@ -65,7 +65,7 @@ int write_membase_base_list(FapsCoredumpContext *context, SceUID memblk_id){
 	if(strlen(mem_info.details.name) == 0)
 		strncpy(name, "noname_memblk", sizeof(name) - 1);
 
-	SceMemBlockObj *pObj;
+	SceUIDMemBlockObject *pObj;
 	res = ksceKernelGetObjForUid(memblk_id, _ksceKernelGetUIDMemBlockClass(), (SceObjectBase **)&pObj);
 	if(res < 0){
 		ksceDebugPrintf("[error] sceGUIDReferObjectWithClass failed : 0x%X, uid:0x%X\n", res, memblk_id);

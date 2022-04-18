@@ -20,7 +20,7 @@ typedef struct SceKernelMemBlockAddressTree { // size is 0x20
 	unsigned int magic;
 } SceKernelMemBlockAddressTree;
 
-typedef struct SceMemBlockObj {
+typedef struct SceUIDMemBlockObject {
 	int sce_rsvd[2];
 	struct SceMemBlockObj *unk_08;
 	int unk_0C;
@@ -36,7 +36,7 @@ typedef struct SceMemBlockObj {
 	int unk_34;
 	int unk_38;
 	SceUID this_obj_uid;
-} SceMemBlockObj;
+} SceUIDMemBlockObject;
 
 typedef struct SceKernelObject { // size is at least 0x24
 	void *pObject;			// 0x0

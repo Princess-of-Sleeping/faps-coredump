@@ -111,7 +111,7 @@ int fapsCreateMemBlockDump(FapsCoredumpContext *context){
 
 		memid_kern = kscePUIDtoGUID(context->pid, context->uid_pool[i]);
 
-		SceMemBlockObj *pObj;
+		SceUIDMemBlockObject *pObj;
 		res = ksceGUIDReferObjectWithClass(memid_kern, _ksceKernelGetUIDMemBlockClass(), (SceObjectBase **)&pObj);
 		if(res < 0)
 			continue;
@@ -213,7 +213,7 @@ int fapsCreateMemBlockInfo(FapsCoredumpContext *context){
 
 		memid_kern = kscePUIDtoGUID(context->pid, context->uid_pool[i]);
 
-		SceMemBlockObj *pObj;
+		SceUIDMemBlockObject *pObj;
 		res = ksceGUIDReferObjectWithClass(memid_kern, _ksceKernelGetUIDMemBlockClass(), (SceObjectBase **)&pObj);
 		if(res < 0){
 			ksceDebugPrintf("[error] sceGUIDReferObjectWithClass failed : 0x%X, uid:0x%X\n", res, memid_kern);
@@ -281,7 +281,7 @@ int fapsCreateMemBlockInfo(FapsCoredumpContext *context){
 int fapsUpdateMemBlockInfo(FapsCoredumpContext *context){
 
 	int res;
-	SceMemBlockObj *pObj;
+	SceUIDMemBlockObject *pObj;
 	SceSize memblock_number = 0;
 	SceUID pid, memid_kern;
 	SceClass *pUIDMemBlockClass;
