@@ -10,6 +10,7 @@
 #include <psp2kern/io/fcntl.h>
 #include <psp2kern/display.h>
 #include "utility.h"
+#include "log.h"
 #include "process_mapping.h"
 #include "coredump_func.h"
 
@@ -57,6 +58,28 @@ int write_bmp_header(SceUID fd, SceUInt32 width, SceUInt32 height){
 	return 0;
 }
 
+int fapsCoredumpCreateDisplayInfo(FapsCoredumpContext *context, const SceDisplayFrameBufInfo *info){
+
+	context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
+	snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s", context->path, "display_info.txt");
+	if(LogOpen(context->temp) < 0)
+		return -1;
+
+	LogWrite("paddr      : %p\n", info->paddr);
+	LogWrite("pid        : 0x%08X\n", info->pid);
+	LogWrite("resolution : 0x%08X\n", info->resolution);
+	LogWrite("vblankcount: 0x%08X\n", info->vblankcount);
+	LogWrite("base       : %p\n", info->framebuf.base);
+	LogWrite("width      : %d\n", info->framebuf.width);
+	LogWrite("height     : %d\n", info->framebuf.height);
+	LogWrite("pitch      : %d\n", info->framebuf.pitch);
+	LogWrite("pixelformat: 0x%X\n", info->framebuf.pixelformat);
+
+	LogClose();
+
+	return 0;
+}
+
 int fapsCoredumpCreateProcessScreenShot(FapsCoredumpContext *context){
 
 	int res, head;
@@ -72,6 +95,10 @@ int fapsCoredumpCreateProcessScreenShot(FapsCoredumpContext *context){
 	if(res < 0 || info_display.paddr == 0)
 		res = ksceDisplayGetProcFrameBufInternal(context->pid, head, 1, &info_display);
 
+	if(res < 0)
+		return res;
+
+	res = fapsCoredumpCreateDisplayInfo(context, &info_display);
 	if(res < 0)
 		return res;
 

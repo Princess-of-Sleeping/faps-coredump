@@ -77,7 +77,6 @@ int fapsCreateMemBlockDump(FapsCoredumpContext *context){
 	int res;
 	SceUID fd, memid_kern;
 	SceKernelMemBlockInfoEx mem_info;
-
 	ElfEntryInfo *pElfEntryInfo;
 
 	// size = sizeof(ElfEntryInfo) * 2048
@@ -89,12 +88,10 @@ int fapsCreateMemBlockDump(FapsCoredumpContext *context){
 
 	memset(pElfEntryInfo, 0, 0x10000);
 
-
 	uint32_t offset = sizeof(Elf32_Ehdr) + (context->memblock_number * sizeof(ElfEntryInfo));
 
 	context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
 	snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s", context->path, "memblock_dump.elf");
-
 
 	res = fapsCoredumpCreateFile(context->temp, (SceOff)(offset + context->memblock_size_cache));
 	if(res < 0){
@@ -102,7 +99,6 @@ int fapsCreateMemBlockDump(FapsCoredumpContext *context){
 	}
 
 	fd = ksceIoOpen(context->temp, SCE_O_WRONLY, 0666);
-	ksceIoLseek(fd, sizeof(Elf32_Ehdr) + (context->memblock_number * sizeof(ElfEntryInfo)), SCE_SEEK_SET);
 
 	for(int i=0;i<context->memblock_number;i++){
 
@@ -110,11 +106,17 @@ int fapsCreateMemBlockDump(FapsCoredumpContext *context){
 			continue;
 
 		memid_kern = kscePUIDtoGUID(context->pid, context->uid_pool[i]);
+		if(memid_kern < 0){
+			ksceDebugPrintf("%s: scePUIDtoGUID(0x%X) 0x%X\n", __FUNCTION__, context->uid_pool[i], memid_kern);
+			continue;
+		}
 
 		SceUIDMemBlockObject *pObj;
 		res = ksceGUIDReferObjectWithClass(memid_kern, _ksceKernelGetUIDMemBlockClass(), (SceObjectBase **)&pObj);
-		if(res < 0)
+		if(res < 0){
+			ksceDebugPrintf("%s: sceGUIDReferObjectWithClass(0x%X) 0x%X\n", __FUNCTION__, memid_kern, res);
 			continue;
+		}
 
 		ksceGUIDReleaseObject(memid_kern);
 
@@ -122,29 +124,30 @@ int fapsCreateMemBlockDump(FapsCoredumpContext *context){
 		mem_info.size = 0xB8;
 
 		res = ksceKernelMemBlockGetInfoEx(memid_kern, &mem_info);
-		if(res < 0)
+		if(res < 0){
+			ksceDebugPrintf("%s: sceKernelMemBlockGetInfoEx(0x%X) 0x%X\n", __FUNCTION__, memid_kern, res);
 			continue;
+		}
 
-		ksceDebugPrintf("0x%03X/0x%03X id:0x%X\n", (i + 1), context->memblock_number, context->uid_pool[i]);
+		ksceIoLseek(fd, offset, SCE_SEEK_SET);
+
+		pElfEntryInfo[i].type   = 1;
+		pElfEntryInfo[i].offset = offset;
+		pElfEntryInfo[i].vaddr  = (uint32_t)pObj->vaddr;
+		pElfEntryInfo[i].paddr  = (uint32_t)pObj->vaddr;
+		pElfEntryInfo[i].filesz = pObj->size;
+		pElfEntryInfo[i].memsz  = pObj->size;
+
+		if((mem_info.details.type & 0xFF) >= 0x10){
+			pElfEntryInfo[i].flags = (pObj->type >> 4) & 0xF;
+		}else{
+			pElfEntryInfo[i].flags = (pObj->type >> 0) & 0xF;
+		}
+		pElfEntryInfo[i].align = 4;
+
+		offset += pObj->size;
 
 		if((unsigned int)mem_info.paddr_list[0] < 0xE0000000){
-
-			pElfEntryInfo[i].type   = 1;
-			pElfEntryInfo[i].offset = offset;
-			pElfEntryInfo[i].vaddr  = (uint32_t)pObj->vaddr;
-			pElfEntryInfo[i].paddr  = (uint32_t)pObj->vaddr;
-			pElfEntryInfo[i].filesz = pObj->size;
-			pElfEntryInfo[i].memsz  = pObj->size;
-
-			if((mem_info.details.type & 0xFF) >= 0x10){
-				pElfEntryInfo[i].flags = (mem_info.details.type >> 4) & 0xF;
-			}else{
-				pElfEntryInfo[i].flags = (mem_info.details.type >> 0) & 0xF;
-			}
-			pElfEntryInfo[i].align = 4;
-
-			offset += pObj->size;
-
 			write_file_proc_by_fd(context->pid, fd, pObj->vaddr, pObj->size);
 		}
 	}
@@ -212,6 +215,10 @@ int fapsCreateMemBlockInfo(FapsCoredumpContext *context){
 			continue;
 
 		memid_kern = kscePUIDtoGUID(context->pid, context->uid_pool[i]);
+		if(memid_kern < 0){
+			ksceDebugPrintf("%s: scePUIDtoGUID(0x%X) 0x%X\n", __FUNCTION__, context->uid_pool[i], memid_kern);
+			continue;
+		}
 
 		SceUIDMemBlockObject *pObj;
 		res = ksceGUIDReferObjectWithClass(memid_kern, _ksceKernelGetUIDMemBlockClass(), (SceObjectBase **)&pObj);
@@ -225,7 +232,11 @@ int fapsCreateMemBlockInfo(FapsCoredumpContext *context){
 		memset(&mem_info, 0, sizeof(mem_info));
 		mem_info.size = 0xB8;
 
-		ksceKernelMemBlockGetInfoEx(memid_kern, &mem_info);
+		res = ksceKernelMemBlockGetInfoEx(memid_kern, &mem_info);
+		if(res < 0){
+			ksceDebugPrintf("%s: sceKernelMemBlockGetInfoEx(0x%X) 0x%X\n", __FUNCTION__, memid_kern, res);
+			continue;
+		}
 
 		name[sizeof(name) - 1] = 0;
 		strncpy(name, mem_info.details.name, sizeof(name) - 1);
