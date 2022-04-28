@@ -29,7 +29,7 @@ add_executable(faps-coredump
   src/process_address_space.c
   src/process_module.c
   src/process_memblock.c
-  src/process_screenshot.c
+  src/process_display.c
   src/process_semaphore.c
   src/process_eventflag.c
   src/process_mutex.c

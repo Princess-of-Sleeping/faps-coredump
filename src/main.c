@@ -9,6 +9,7 @@
 #include <psp2kern/kernel/sysclib.h>
 #include <psp2kern/kernel/sysroot.h>
 #include <psp2kern/io/fcntl.h>
+#include <psp2kern/sblaimgr.h>
 #include <taihen.h>
 #include "types.h"
 #include "utility.h"
@@ -47,7 +48,6 @@ int (* _kscePUIDGetUIDVectorByClass)(SceUID pid, SceClass *cls, int vis_level, S
 int (* _ksceKernelGetModuleInfo)(SceUID pid, SceUID modid, SceKernelModuleInfo *info);
 int (* _ksceKernelGetModuleIdByAddr)(SceUID pid, const void *a2);
 
-SceUIDPhyMemPartObject *(* sceKernelGetPhyPartKernel)(void);
 int (* sceKernelGetPhyMemPartInfoCore)(SceUIDPhyMemPartObject *a1, SceSysmemAddressSpaceInfo *pInfo);
 
 int (* sceCoredumpGetCrashThreadCause)(SceUID thid, const SceCoredumpCrashCauseParam *param, SceCoredumpCrashCauseResult *result);
@@ -87,11 +87,17 @@ int fapsCoredumpMoveOriginalSceCoredump(FapsCoredumpContext *context, const char
 	if(path_len == 0 || path_len == FAPS_COREDUMP_PATH_SIZE)
 		return -1;
 
-	if(strncmp(sce_coredump_path, context->path, 6) == 0){
+	const char *s = strchr(sce_coredump_path, ':');
+	if(s == NULL){
+		return -1;
+	}
+
+	if(strncmp(sce_coredump_path, context->path, s - sce_coredump_path) == 0){
 
 		const char *file = strchr_back(sce_coredump_path, '/');
-		if(file == NULL)
-			file = strchr_back(sce_coredump_path, ':');
+		if(file == NULL){
+			file = s;
+		}
 
 		if(file != NULL){
 			context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
@@ -170,10 +176,10 @@ int ksceCoredumpCreateDump_patch(SceUID pid, const char *titleid, SceSize titlei
 	return res;
 }
 
-tai_hook_ref_t ksceSblACMgrIsAllowCoredump_ref;
-int ksceSblACMgrIsAllowCoredump_patch(SceUID pid){
+tai_hook_ref_t sceSblACMgrIsAllowProcessDebug_ref;
+int sceSblACMgrIsAllowProcessDebug_patch(SceUID pid){
 
-	TAI_CONTINUE(int, ksceSblACMgrIsAllowCoredump_ref, pid);
+	TAI_CONTINUE(int, sceSblACMgrIsAllowProcessDebug_ref, pid);
 
 	return 1;
 }
@@ -209,10 +215,6 @@ int fapsCoredumpGetFunction(void){
 
 	if(GetExport("SceSysmem", 0x63A519E5, 0xB16D5136, &_kscePUIDGetUIDVectorByClass) < 0)
 	if(GetExport("SceSysmem", 0x02451F0F, 0x08C05493, &_kscePUIDGetUIDVectorByClass) < 0)
-		return -1;
-
-	if(GetExport("SceSysmem", 0x63A519E5, 0x4D38F861, &sceKernelGetPhyPartKernel) < 0)
-	if(GetExport("SceSysmem", 0x02451F0F, 0x0164D817, &sceKernelGetPhyPartKernel) < 0)
 		return -1;
 
 	if(GetExport("SceSysmem", 0x63A519E5, 0x3650963F, &sceKernelGetPhyMemPartInfoCore) < 0)
@@ -262,7 +264,7 @@ int module_start(SceSize argc, const void *args){
 	if(res < 0)
 		return SCE_KERNEL_START_NO_RESIDENT;
 
-	res = ksceKernelCreateMutex("SceFapsCoredumpMutex", 0, 1, 0);
+	res = ksceKernelCreateMutex("FapsCoredumpMutex", 0, 1, 0);
 	if(res < 0)
 		return SCE_KERNEL_START_NO_RESIDENT;
 
@@ -276,12 +278,12 @@ int module_start(SceSize argc, const void *args){
 	switch(tai_coredump_info.module_nid){
 	case 0x3E0F5EBD: // 3.60
 		temp_patch_uid = taiInjectDataForKernel(SCE_GUID_KERNEL_PROCESS_ID, tai_coredump_info.modid, 0, 0xB3FA, &SceCoredump_loop_patch, 0x2);
-	break;
+		break;
 	case 0xDAD20481: // 3.65
 	case 0x3CD1BC7E: // 3.67
 	case 0x442FC8DA: // 3.68
 		temp_patch_uid = taiInjectDataForKernel(SCE_GUID_KERNEL_PROCESS_ID, tai_coredump_info.modid, 0, 0xB3FE, &SceCoredump_loop_patch, 0x2);
-	break;
+		break;
 	default:
 		return SCE_KERNEL_START_NO_RESIDENT;
 	}
@@ -297,11 +299,18 @@ int module_start(SceSize argc, const void *args){
 	// for ★Generate Core File
 	hook_id[2] = HookImport("SceVshBridge", 0xA351714A, 0x0C10313F, ksceCoredumpCreateDump);
 
-	// for create non encrypted sce coredump
-	hook_id[3] = HookImport("SceCoredump", 0x9AD8E213, 0x4CBD6156, ksceSblACMgrIsAllowCoredump);
+	// for Create debuggable sce coredump
+	hook_id[3] = HookImport("SceCoredump", 0x9AD8E213, 0x4CBD6156, sceSblACMgrIsAllowProcessDebug);
 
-	// for devkit
-	ksceKernelSysrootRegisterCoredumpTrigger(sceKernelCoredumpTrigger_patch);
+	if(ksceSblAimgrIsTest() != SCE_FALSE && ksceSblAimgrIsTool() != SCE_FALSE){
+		/*
+		 * for Development Kit remote process dump (psp2ctrl pdump)
+		 *
+		 * The original registration is SceCoredump::sceKernelCoredumpTrigger,
+		 * but since it calls SceAppMgr::sceKernelCoredumpTrigger (import) inside sceKernelCoredumpTrigger_patch, it doesn't matter if overwrite it.
+		 */
+		ksceKernelSysrootRegisterCoredumpTrigger(sceKernelCoredumpTrigger_patch);
+	}
 
 	SceCoredumpQueueInfo *pQueueInfo;
 

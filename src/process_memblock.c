@@ -72,7 +72,7 @@ int fapsCoredumpCreateFile(const char *path, SceOff size){
 	return 0;
 }
 
-int fapsCreateMemBlockDump(FapsCoredumpContext *context){
+int fapsCoredumpCreateMemBlockDump(FapsCoredumpContext *context){
 
 	int res;
 	SceUID fd, memid_kern;
@@ -197,7 +197,7 @@ free_mem:
 	return res;
 }
 
-int fapsCreateMemBlockInfo(FapsCoredumpContext *context){
+int fapsCoredumpCreateMemBlockInfo(FapsCoredumpContext *context){
 
 	int res;
 	SceUID memid_kern;
@@ -289,7 +289,7 @@ int fapsCreateMemBlockInfo(FapsCoredumpContext *context){
 	return 0;
 }
 
-int fapsUpdateMemBlockInfo(FapsCoredumpContext *context){
+int fapsCoredumpUpdateMemBlockInfo(FapsCoredumpContext *context){
 
 	int res;
 	SceUIDMemBlockObject *pObj;

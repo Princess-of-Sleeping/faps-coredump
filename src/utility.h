@@ -21,8 +21,6 @@ int fapsCoredumpIsNonCpuCrash(const FapsCoredumpContext *context);
 int fapsCoredumpIsSceShellUnknownCrash(const FapsCoredumpContext *context);
 int fapsCoredumpIsGpuCrash(const FapsCoredumpContext *context);
 
-int _fapsCoredumpIsFullDump(void);
-
 int fapsCoredumpIsMiniDump(const FapsCoredumpContext *context);
 int fapsCoredumpIsLittleDump(const FapsCoredumpContext *context);
 int fapsCoredumpIsNormalDump(const FapsCoredumpContext *context);

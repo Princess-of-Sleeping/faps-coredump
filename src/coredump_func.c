@@ -104,7 +104,7 @@ int fapsCoredumpInitUIDPool(FapsCoredumpContext *context){
 	return 0;
 }
 
-int fapsCoredumpFineUIDPool(FapsCoredumpContext *context){
+int fapsCoredumpFiniUIDPool(FapsCoredumpContext *context){
 
 	if(context->memblock_id >= 0){
 		ksceKernelFreeMemBlock(context->memblock_id);

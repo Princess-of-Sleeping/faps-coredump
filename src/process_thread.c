@@ -17,7 +17,7 @@
 extern SceClass *(* _ksceKernelGetUIDThreadClass)(void);
 extern int (* _kscePUIDGetUIDVectorByClass)(SceUID pid, SceClass *cls, int vis_level, SceUID *vector, SceSize num, SceSize *ret_num);
 
-int fapsCreateProcessThreadInfo(FapsCoredumpContext *context){
+int fapsCoredumpCreateProcessThreadInfo(FapsCoredumpContext *context){
 
 	SceClass *pSceUIDThreadClass;
 	SceUID *thread_ids;

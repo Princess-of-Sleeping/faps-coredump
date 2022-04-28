@@ -8,6 +8,7 @@
 #include <psp2kern/kernel/sysclib.h>
 #include "types.h"
 #include "log.h"
+#include "utility.h"
 #include "sce_as.h"
 #include "coredump_func.h"
 
@@ -236,7 +237,9 @@ int fapsCoredumpCreateAsInfoDump(FapsCoredumpContext *context){
 
 	LogClose();
 
-	_fapsCoredumpCreateTTBR1Dump(context, pAsInfoProc);
+	if(fapsCoredumpIsFullDump(context) != 0){
+		_fapsCoredumpCreateTTBR1Dump(context, pAsInfoProc);
+	}
 
 	return 0;
 }

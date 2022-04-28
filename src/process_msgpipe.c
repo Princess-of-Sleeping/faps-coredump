@@ -15,7 +15,7 @@
 extern int (* _ksceKernelFindClassByName)(const char *name, SceClass **cls);
 extern int (* _kscePUIDGetUIDVectorByClass)(SceUID pid, SceClass *cls, int vis_level, SceUID *vector, SceSize num, SceSize *ret_num);
 
-int fapsCreateProcessMsgpipeInfo(FapsCoredumpContext *context){
+int fapsCoredumpCreateProcessMsgpipeInfo(FapsCoredumpContext *context){
 
 	SceClass *pSceUIDMsgPipeClass;
 	SceUID *msgpipeids;

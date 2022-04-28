@@ -6,8 +6,6 @@
 #include <psp2kern/types.h>
 #include <psp2kern/kernel/sysmem.h>
 #include <psp2kern/io/fcntl.h>
-#include <psp2kern/io/stat.h>
-#include <psp2kern/registrymgr.h>
 #include "types.h"
 #include "utility.h"
 #include "process_mapping.h"
@@ -92,27 +90,6 @@ int fapsCoredumpIsGpuCrash(const FapsCoredumpContext *context){
 	}
 
 	return 0;
-}
-
-int _fapsCoredumpIsFullDump(void){
-
-	SceIoStat stat;
-	int res, val;
-
-	if(ksceIoGetstat("sd0:faps-coredump-fulldump-flag", &stat) == 0)
-		return 1;
-
-	if(ksceIoGetstat("host0:data/faps-coredump-fulldump-flag", &stat) == 0)
-		return 1;
-
-	res = ksceRegMgrGetKeyInt("/CONFIG/COREDUMP/", "dump_level", &val);
-	if(res >= 0){
-		return (val == 0) ? 0 : 1;
-	}
-
-	res = (ksceIoGetstat("ux0:data/faps-coredump-fulldump-flag", &stat) == 0) ? 1 : 0;
-
-	return res;
 }
 
 int fapsCoredumpIsTargetDump(const FapsCoredumpContext *context, int target_level){

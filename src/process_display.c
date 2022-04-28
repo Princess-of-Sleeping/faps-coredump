@@ -1,5 +1,5 @@
 /*
- * faps-coredump process_screenshot.c
+ * faps-coredump process_display.c
  * Copyright (C) 2021, Princess of Sleeping
  */
 
@@ -65,10 +65,13 @@ int fapsCoredumpCreateDisplayInfo(FapsCoredumpContext *context, const SceDisplay
 	if(LogOpen(context->temp) < 0)
 		return -1;
 
-	LogWrite("paddr      : %p\n", info->paddr);
-	LogWrite("pid        : 0x%08X\n", info->pid);
-	LogWrite("resolution : 0x%08X\n", info->resolution);
-	LogWrite("vblankcount: 0x%08X\n", info->vblankcount);
+	if(fapsCoredumpIsFullDump(context) != 0){
+		LogWrite("paddr      : %p\n", info->paddr);
+		LogWrite("pid        : 0x%08X\n", info->pid);
+		LogWrite("resolution : 0x%08X\n", info->resolution);
+		LogWrite("vblankcount: 0x%08X\n", info->vblankcount);
+	}
+
 	LogWrite("base       : %p\n", info->framebuf.base);
 	LogWrite("width      : %d\n", info->framebuf.width);
 	LogWrite("height     : %d\n", info->framebuf.height);
@@ -80,7 +83,7 @@ int fapsCoredumpCreateDisplayInfo(FapsCoredumpContext *context, const SceDisplay
 	return 0;
 }
 
-int fapsCoredumpCreateProcessScreenShot(FapsCoredumpContext *context){
+int fapsCoredumpCreateProcessDisplayInfo(FapsCoredumpContext *context){
 
 	int res, head;
 	SceUID fd, memid;
@@ -102,7 +105,7 @@ int fapsCoredumpCreateProcessScreenShot(FapsCoredumpContext *context){
 	if(res < 0)
 		return res;
 
-	if(info_display.framebuf.base == NULL)
+	if(fapsCoredumpIsManyDump(context) == 0 || info_display.framebuf.base == NULL)
 		return 0;
 
 	SceSize fb_size = info_display.framebuf.pitch * info_display.framebuf.height * sizeof(SceUInt32);

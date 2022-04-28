@@ -6,8 +6,10 @@
 #include <psp2kern/kernel/debug.h>
 #include <psp2kern/kernel/sysclib.h>
 #include <psp2kern/kernel/threadmgr.h>
+#include <psp2kern/io/stat.h>
 #include <psp2kern/ctrl.h>
 #include <psp2kern/touch.h>
+#include <psp2kern/registrymgr.h>
 #include "types.h"
 #include "utility.h"
 #include "log.h"
@@ -128,24 +130,24 @@ const FapsCoredumpDumpFunc dump_func_list[] = {
 		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
 	},
 	{
-		.func = fapsUpdateMemBlockInfo,
+		.func = fapsCoredumpUpdateMemBlockInfo,
 		.name = "MEMBLOCK_UPDATE",
 		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_NORMAL
 	},
 	{
-		.func = fapsCreateMemBlockInfo,
+		.func = fapsCoredumpCreateMemBlockInfo,
 		.name = "MEMBLOCK_INFO",
 		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_NORMAL
 	},
 	{
-		.func = fapsCreateMemBlockDump,
+		.func = fapsCoredumpCreateMemBlockDump,
 		.name = "MEMBLOCK_DUMP",
 		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_FULL
 	},
 	{
-		.func = fapsCoredumpCreateProcessScreenShot,
-		.name = "PROCESS_SCREEN_SHOT",
-		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
+		.func = fapsCoredumpCreateProcessDisplayInfo,
+		.name = "PROCESS_DISPLAY_INFO",
+		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_NORMAL
 	},
 	{
 		.func = fapsCoredumpCreateProcessIofileInfo,
@@ -153,54 +155,75 @@ const FapsCoredumpDumpFunc dump_func_list[] = {
 		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_NORMAL
 	},
 	{
-		.func = fapsCreateProcessThreadInfo,
+		.func = fapsCoredumpCreateProcessThreadInfo,
 		.name = "PROCESS_THREAD_INFO",
 		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
 	},
 	{
-		.func = fapsCreateProcessSemaphoreInfo,
+		.func = fapsCoredumpCreateProcessSemaphoreInfo,
 		.name = "PROCESS_SEMA_INFO",
 		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
 	},
 	{
-		.func = fapsCreateProcessEventflagInfo,
+		.func = fapsCoredumpCreateProcessEventflagInfo,
 		.name = "PROCESS_EVENT_FLAG_INFO",
 		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
 	},
 	{
-		.func = fapsCreateProcessMutexInfo,
+		.func = fapsCoredumpCreateProcessMutexInfo,
 		.name = "PROCESS_MUTEX_INFO",
 		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
 	},
 	{
-		.func = fapsCreateProcessLwMutexInfo,
+		.func = fapsCoredumpCreateProcessLwMutexInfo,
 		.name = "PROCESS_LW_MUTEX_INFO",
 		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
 	},
 	{
-		.func = fapsCreateProcessMsgpipeInfo,
+		.func = fapsCoredumpCreateProcessMsgpipeInfo,
 		.name = "PROCESS_MSG_PIPE_INFO",
 		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
 	},
 	{
-		.func = fapsCreateProcessLwCondInfo,
+		.func = fapsCoredumpCreateProcessLwCondInfo,
 		.name = "PROCESS_LW_COND_INFO",
 		.flag = FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE | FAPS_COREDUMP_FUNC_FLAG_MANY
 	},
 	{
-		.func = fapsCoredumpFineUIDPool,
-		.name = "UID_POOL_FINE",
+		.func = fapsCoredumpFiniUIDPool,
+		.name = "UID_POOL_FINI",
 		.flag = FAPS_COREDUMP_FUNC_FLAG_FORCED
 	}
 };
 
 #define FAPS_COREDUMP_DUMP_FUNC_NUMBER (sizeof(dump_func_list) / sizeof(dump_func_list[0]))
 
+int _fapsCoredumpIsFullDump(void){
+
+	SceIoStat stat;
+	int res, val;
+
+	if(ksceIoGetstat("sd0:faps-coredump-fulldump-flag", &stat) == 0)
+		return 1;
+
+	if(ksceIoGetstat("host0:data/faps-coredump-fulldump-flag", &stat) == 0)
+		return 1;
+
+	res = ksceRegMgrGetKeyInt("/CONFIG/COREDUMP/", "dump_level", &val);
+	if(res >= 0){
+		return (val == 0) ? 0 : 1;
+	}
+
+	res = (ksceIoGetstat("ux0:data/faps-coredump-fulldump-flag", &stat) == 0) ? 1 : 0;
+
+	return res;
+}
+
 int fapsCoredumpTrigger(FapsCoredumpContext *context){
 
-	int res, cpu, is_skip, is_fulldump, flag;
+	int res, cpu, is_skip, flag;
 	SceUInt32 ctrl_mask;
-	SceInt64 time_s, time_e;
+	SceInt64 time_s, time_e, ftime_s, ftime_e;
 
 	if(context->pid == SCE_GUID_KERNEL_PROCESS_ID)
 		return 0;
@@ -220,9 +243,8 @@ int fapsCoredumpTrigger(FapsCoredumpContext *context){
 	time_s = ksceKernelGetSystemTimeWide();
 
 	is_skip = 0; // TODO
-	is_fulldump = _fapsCoredumpIsFullDump();
 
-	context->dump_level = 3 + is_fulldump;
+	context->dump_level = 3 + _fapsCoredumpIsFullDump();
 
 	for(int i=0;i<FAPS_COREDUMP_DUMP_FUNC_NUMBER;i++){
 		if(context->update_func != NULL){
@@ -232,24 +254,28 @@ int fapsCoredumpTrigger(FapsCoredumpContext *context){
 		flag = dump_func_list[i].flag;
 
 		if((flag & FAPS_COREDUMP_FUNC_FLAG_FORCED) == 0){
-			if((flag & FAPS_COREDUMP_FUNC_FLAG_FULL) != 0 && is_fulldump == 0)
+			if((flag & FAPS_COREDUMP_FUNC_FLAG_FULL) != 0 && fapsCoredumpIsFullDump(context) == 0)
+				continue;
+
+			if((flag & FAPS_COREDUMP_FUNC_FLAG_MANY) != 0 && fapsCoredumpIsManyDump(context) == 0)
+				continue;
+
+			if((flag & FAPS_COREDUMP_FUNC_FLAG_NORMAL) != 0 && fapsCoredumpIsNormalDump(context) == 0)
+				continue;
+
+			if((flag & FAPS_COREDUMP_FUNC_FLAG_LITTLE) != 0 && fapsCoredumpIsLittleDump(context) == 0)
+				continue;
+
+			if((flag & FAPS_COREDUMP_FUNC_FLAG_MINIMUM) != 0 && fapsCoredumpIsMiniDump(context) == 0)
 				continue;
 
 			if((flag & FAPS_COREDUMP_FUNC_FLAG_SKIPPABLE) != 0 && is_skip != 0)
 				continue;
 		}
 
-
-
-		SceInt64 ftime_s, ftime_e;
-
 		ftime_s = ksceKernelGetSystemTimeWide();
 
-		if(dump_func_list[i].func == NULL){
-			res = 0;
-		}else{
-			res = dump_func_list[i].func(context);
-		}
+		res = (dump_func_list[i].func == NULL) ? 0 : dump_func_list[i].func(context);
 
 		ftime_e = ksceKernelGetSystemTimeWide();
 
