@@ -67,33 +67,17 @@ typedef struct SceUIDPhyMemPartObject { // size is 0xAC-bytes
 	void *data_0x2C;
 
 	void *data_0x30;
-	int data_0x34;
-	void *data_0x38;
-	int data_0x3C;
 
-	void *data_0x40;
-	int data_0x44;
-	void *data_0x48;
-	int data_0x4C;
+	struct {
+		int id;
+		void *data;
+	} vector_0x34[9];
 
-	void *data_0x50;
-	int data_0x54;
-	void *data_0x58;
-	int data_0x5C;
-
-	void *data_0x60;
-	int data_0x64;
-	void *data_0x68;
-	int data_0x6C;
-
-	void *data_0x70;
-	int data_0x74;
-	void *data_0x78;
-	void *data_0x7C;
+	void *data_0x7C; // size is 0x30-bytes
 
 	int data_0x80;
-	int data_0x84;
-	int data_0x88;
+	SceSize free_size;
+	SceSize free_size_internal;
 	char name[0x20];
 } SceUIDPhyMemPartObject;
 

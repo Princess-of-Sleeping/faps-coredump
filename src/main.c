@@ -302,7 +302,7 @@ int module_start(SceSize argc, const void *args){
 	// for Create debuggable sce coredump
 	hook_id[3] = HookImport("SceCoredump", 0x9AD8E213, 0x4CBD6156, sceSblACMgrIsAllowProcessDebug);
 
-	if(ksceSblAimgrIsTest() != SCE_FALSE && ksceSblAimgrIsTool() != SCE_FALSE){
+	if(ksceSblAimgrIsTest() != SCE_FALSE || ksceSblAimgrIsTool() != SCE_FALSE){
 		/*
 		 * for Development Kit remote process dump (psp2ctrl pdump)
 		 *
