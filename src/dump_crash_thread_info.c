@@ -375,13 +375,11 @@ no_module_pc:
 	LogWriteThreadCpuRegs(context->pid, &cpu_registers);
 
 	LogWrite("float register(user)\n");
-	for(int i=0;i<0x40;i+=4){
+	for(int i=0;i<0x20;i+=2){
 		LogWrite(
-			"s%-02d 0x%08X s%-02d 0x%08X s%-02d 0x%08X s%-02d 0x%08X\n",
-			(i + 0), thread_info->pVfpInfo->vfp_register.s.value_as_int[i + 0],
-			(i + 1), thread_info->pVfpInfo->vfp_register.s.value_as_int[i + 1],
-			(i + 2), thread_info->pVfpInfo->vfp_register.s.value_as_int[i + 2],
-			(i + 3), thread_info->pVfpInfo->vfp_register.s.value_as_int[i + 3]
+			"d%-02d 0x%016llX d%-02d 0x%016llX\n",
+			(i + 0), thread_info->pVfpInfo->vfp_register.d.value_as_int[i + 0],
+			(i + 1), thread_info->pVfpInfo->vfp_register.d.value_as_int[i + 1]
 		);
 	}
 

@@ -50,6 +50,7 @@ target_link_libraries(faps-coredump
   SceIofilemgrForDriver_stub
   SceProcessmgrForDriver_stub
   SceModulemgrForDriver_stub
+  SceSysconForDriver_stub
   SceSysclibForDriver_stub
   SceSysrootForDriver_stub
   SceSysrootForKernel_stub

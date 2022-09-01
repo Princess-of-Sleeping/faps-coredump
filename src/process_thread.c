@@ -107,13 +107,11 @@ int fapsCoredumpCreateProcessThreadInfo(FapsCoredumpContext *context){
 		}
 
 		LogWrite("Vfp register\n");
-		for(int i=0;i<0x40;i+=4){
+		for(int i=0;i<0x20;i+=2){
 			LogWrite(
-				"s%-02d 0x%08X s%-02d 0x%08X s%-02d 0x%08X s%-02d 0x%08X\n",
-				(i + 0), info.pVfpInfo->vfp_register.s.value_as_int[i + 0],
-				(i + 1), info.pVfpInfo->vfp_register.s.value_as_int[i + 1],
-				(i + 2), info.pVfpInfo->vfp_register.s.value_as_int[i + 2],
-				(i + 3), info.pVfpInfo->vfp_register.s.value_as_int[i + 3]
+				"d%-02d 0x%016llX d%-02d 0x%016llX\n",
+				(i + 0), info.pVfpInfo->vfp_register.d.value_as_int[i + 0],
+				(i + 1), info.pVfpInfo->vfp_register.d.value_as_int[i + 1]
 			);
 		}
 

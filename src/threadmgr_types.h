@@ -10,6 +10,45 @@
 #include <psp2kern/kernel/threadmgr.h>
 #include "sce_as.h"
 
+
+typedef union SceKernelThreadVfpRegister { // size is 0x100-bytes
+	union {
+		SceFloat  value[0x40];
+		SceUInt32 value_as_int[0x40];
+	} s;
+	union {
+		SceDouble value[0x20];
+		SceUInt64 value_as_int[0x20];
+	} d;
+} SceKernelThreadVfpRegister;
+
+typedef struct SceKernelThreadVfpInfo { // size is 0x120-bytes
+	SceKernelThreadVfpRegister vfp_register;
+	SceUInt32 fpscr;
+	SceUInt32 fpexc;
+	SceUInt32 unk_0x108;
+	SceUInt32 unk_0x10C;
+	SceUInt32 unk_0x110;
+	SceUInt32 unk_0x114;
+	SceUInt32 unk_0x118;
+	SceUInt32 unk_0x11C;
+} SceKernelThreadVfpInfo;
+
+typedef struct SceKernelThreadRegisterInfo { // size is 0x60-bytes
+	SceUInt32 reg[0xD];
+	SceUInt32 unk_0x34;
+	SceUInt32 unk_0x38; // ex:0xB90B45, lr?
+	SceUInt32 fpscr;
+	SceUInt32 unk_0x40;
+	SceUInt32 unk_0x44;
+	SceUInt32 unk_0x48;
+	SceUInt32 unk_0x4C;
+	SceUInt32 sp;
+	SceUInt32 lr;
+	SceUInt32 pc;
+	SceUInt32 cpsr;
+} SceKernelThreadRegisterInfo;
+
 typedef struct SceKernelThreadRegisters { // size is 0x100
 	int mode; // kernel:0, user:1
 
@@ -71,159 +110,30 @@ typedef struct SceKernelThreadRegisters { // size is 0x100
 	int unk_0xEC;
 
 	int unk_0xF0;
-	int unk_0xF4;
+	SceKernelThreadVfpInfo *unk_0xF4; // TODO: check data type
 	int unk_0xF8;
 	int unk_0xFC;
 } SceKernelThreadRegisters;
-
-typedef struct SceKernelThreadVfpRegister { // size is 0x100-bytes
-	union {
-		struct {
-			SceFloat  value[0x40];
-			SceUInt32 value_as_int[0x40];
-		} s;
-		struct {
-			SceDouble value[0x20];
-			SceUInt64 value_as_int[0x20];
-		} d;
-	};
-} SceKernelThreadVfpRegister;
-
-typedef struct SceKernelThreadVfpInfo { // size is 0x120-bytes
-	SceKernelThreadVfpRegister vfp_register;
-	SceUInt32 fpscr;
-	SceUInt32 fpexc;
-	SceUInt32 unk_0x108;
-	SceUInt32 unk_0x10C;
-	SceUInt32 unk_0x110;
-	SceUInt32 unk_0x114;
-	SceUInt32 unk_0x118;
-	SceUInt32 unk_0x11C;
-} SceKernelThreadVfpInfo;
-
-typedef struct SceKernelThreadRegisterInfo { // size is 0x60-bytes
-	SceUInt32 reg[0xD];
-	SceUInt32 unk_0x34;
-	SceUInt32 unk_0x38; // ex:0xB90B45, lr?
-	SceUInt32 fpscr;
-	SceUInt32 unk_0x40;
-	SceUInt32 unk_0x44;
-	SceUInt32 unk_0x48;
-	SceUInt32 unk_0x4C;
-	SceUInt32 sp;
-	SceUInt32 lr;
-	SceUInt32 pc;
-	SceUInt32 cpsr;
-} SceKernelThreadRegisterInfo;
-
-typedef struct SceKernelThreadInfoInternal { // size is 0x128-bytes
-	SceSize size;
-	SceUID thid_user;
-	SceUID processId;
-
-	// offset:0xC
-	char name[0x20];
-	int pad_0x2C;
-
-	// offset:0x30
-	SceUInt attr;
-	int status;
-	SceKernelThreadEntry entry;
-	void *stack;
-
-	// offset:0x40
-	SceSize         stackSize;
-	int unk_0x44;
-	int unk_0x48;
-	void *kernel_stack;
-
-	// offset:0x50
-	SceSize kernel_stack_size;
-	int unk_0x54;
-	int unk_0x58;
-	int unk_0x5C;
-
-	// offset:0x60
-	int unk_0x60;
-	int unk_0x64;
-	int unk_0x68;
-	void *ptr_0x6C; // kernel tls?
-
-	// offset:0x70
-	int unk_0x70;
-	int unk_0x74;
-	int initPriority;
-	int currentPriority;
-
-	// offset:0x80
-	int initCpuAffinityMask;
-	int currentCpuAffinityMask;
-	int unk_0x88;
-	int currentCpuId;
-
-	// offset:0x90
-	int lastExecutedCpuId;
-	int waitType; // maybe
-	int unk_0x98;
-	SceKernelSysClock runClocks;
-
-	int exitStatus;
-	int unk_0xA8; // IsThreadDebugSuspended
-	SceUInt     intrPreemptCount;
-
-	// offset:0xB0
-	SceUInt     threadPreemptCount;
-	SceUInt     threadReleaseCount;
-	SceUID      fNotifyCallback;
-	int         reserved; // from SceUIDThreadObject->unk_0x4C bit30
-
-	SceKernelThreadRegisters *pRegisters;
-	SceKernelThreadVfpInfo *pVfpInfo;
-	SceKernelThreadRegisterInfo *pUserRegisterInfo; // Is it set only when cause (0x1000X)
-	int unk_0xCC;
-
-	void *pUserTLS;
-	int unk_0xD4;
-	int unk_0xD8;
-	void *ptr_0xDC; // size is 0x18
-
-	int unk_0xE0;
-	int unk_0xE4;
-	int unk_0xE8;
-	int unk_0xEC;
-
-	int unk_0xF0;
-	int unk_0xF4;
-	int unk_0xF8; // from SceUIDThreadObject->unk_0x4C bit27
-	int unk_0xFC;
-
-	void *ptr_0x100;
-	int unk_0x104;
-	int unk_0x108;
-	int unk_0x10C;
-
-	int unk_0x110;
-	int unk_0x114;
-	int unk_0x118;
-	int unk_0x11C;
-
-	int unk_0x120;
-	int unk_0x124;
-} __attribute__((packed)) SceKernelThreadInfoInternal;
 
 typedef struct SceKernelThreadObject { // size is 0x1B0-bytes
 	void *ptr_0x28; // some tree, in SceKernelThreadMgr?
 	void *ptr_0x2C; // some tree
 	SceUID thread_id; // this object guid
 	SceKernelThreadRegisters *ptr_0x34;
+
+	// 0x10
 	SceKernelThreadVfpInfo *ptr_0x38;
 	int data_0x3C;
 	void *ptr_0x40; // SceProcessmgrInfoInternal ptr
 	void *data_0x44; // some bkpt
+
+	// 0x20
 	void *data_0x48; // some bkpt
 	int data_0x4C;
 	int data_0x50;
 	int data_0x54;
+
+	// 0x30
 	int data_0x58; // this ptr?
 	void *ptr_0x5C; // userland. TLS
 	SceUID processId;
@@ -349,6 +259,101 @@ typedef struct SceUIDThreadObject { // size is 0x200-bytes
 	int data_0x1F8;
 	int data_0x1FC;
 } SceUIDThreadObject;
+
+typedef struct SceKernelThreadInfoInternal { // size is 0x128-bytes
+	SceSize size;
+	SceUID thid_user;
+	SceUID processId;
+
+	// offset:0xC
+	char name[0x20];
+	int pad_0x2C;
+
+	// offset:0x30
+	SceUInt attr;
+	int status;
+	SceKernelThreadEntry entry;
+	void *stack;
+
+	// offset:0x40
+	SceSize         stackSize;
+	int unk_0x44;
+	int unk_0x48;
+	void *kernel_stack;
+
+	// offset:0x50
+	SceSize kernel_stack_size;
+	int unk_0x54;
+	int unk_0x58;
+	int unk_0x5C;
+
+	// offset:0x60
+	int unk_0x60;
+	int unk_0x64;
+	int unk_0x68;
+	SceKernelThreadVfpInfo *ptr_0x6C; // kernel tls? from uidobject + 0x58
+
+	// offset:0x70
+	int unk_0x70;
+	int unk_0x74;
+	int initPriority;
+	int currentPriority;
+
+	// offset:0x80
+	int initCpuAffinityMask;
+	int currentCpuAffinityMask;
+	int unk_0x88;
+	int currentCpuId;
+
+	// offset:0x90
+	int lastExecutedCpuId;
+	int waitType; // maybe
+	int unk_0x98;
+	SceKernelSysClock runClocks;
+
+	int exitStatus;
+	int unk_0xA8; // IsThreadDebugSuspended
+	SceUInt     intrPreemptCount;
+
+	// offset:0xB0
+	SceUInt     threadPreemptCount;
+	SceUInt     threadReleaseCount;
+	SceUID      fNotifyCallback;
+	int         reserved; // from SceUIDThreadObject->unk_0x4C bit30
+
+	SceKernelThreadRegisters *pRegisters;
+	SceKernelThreadVfpInfo *pVfpInfo;
+	SceKernelThreadRegisterInfo *pUserRegisterInfo; // Is it set only when cause (0x1000X)
+	int unk_0xCC;
+
+	void *pUserTLS;
+	int unk_0xD4;
+	int unk_0xD8;
+	void *ptr_0xDC; // size is 0x18
+
+	int unk_0xE0;
+	int unk_0xE4;
+	int unk_0xE8;
+	int unk_0xEC;
+
+	int unk_0xF0;
+	int unk_0xF4;
+	int unk_0xF8; // from SceUIDThreadObject->unk_0x4C bit27
+	int unk_0xFC;
+
+	SceKernelThreadObject *pThreadObject;
+	int unk_0x104;
+	int unk_0x108;
+	int unk_0x10C;
+
+	int unk_0x110;
+	int unk_0x114;
+	int unk_0x118;
+	int unk_0x11C;
+
+	int unk_0x120;
+	int unk_0x124;
+} __attribute__((packed)) SceKernelThreadInfoInternal;
 
 int ksceKernelGetThreadIdList(SceUID pid, SceUID *ids, int n, int *copy_count);
 int ksceKernelGetThreadInfo(SceUID thid, SceKernelThreadInfo *info);
