@@ -27,9 +27,11 @@ int fapsCoredumpCreateHwInfo(FapsCoredumpContext *context){
 
 	LogWrite("hw info: 0x%X\n", hwinfo);
 
-	res = ksceSysconGetHardwareInfo2(&hwinfo, NULL, NULL);
+	SceUInt32 hwinfo2[4];
+
+	res = ksceSysconGetHardwareInfo2(hwinfo2, NULL, NULL);
 	if(res == 0){
-		LogWrite("hw info 2: 0x%X\n", hwinfo);
+		LogWrite("hw info 2: 0x%08X 0x%08X 0x%08X 0x%08X\n", hwinfo2[0], hwinfo2[1], hwinfo2[2], hwinfo2[3]);
 	}
 
 	LogWrite("ProductCode:0x%X ProductSubCode:0x%X\n", ksceSblAimgrGetProductCode(), ksceSblAimgrGetProductSubCode());
