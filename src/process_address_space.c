@@ -13,7 +13,8 @@
 #include "coredump_func.h"
 
 extern int (* sceKernelGetPhyMemPartInfoCore)(SceUIDPhyMemPartObject *a1, SceSysmemAddressSpaceInfo *pInfo);
-extern int (* sceKernelSysrootPIDtoAddressSpaceCB)(SceUID pid, SceUIDAddressSpaceObject **ppInfo);
+extern SceUID (* sceKernelGetProcessAddressSpace)(SceUID pid);
+extern int (* SceSysmemForKernel_C3EF4055)(SceUID asid, void *pInfo);
 
 /*
  *    AP | Privilege | User | Description
@@ -27,6 +28,7 @@ extern int (* sceKernelSysrootPIDtoAddressSpaceCB)(SceUID pid, SceUIDAddressSpac
  * 1 1 1 |        RO |   RO | Read-Only
  */
 
+/*
 int write_ttbr_page_large(SceUInt32 i, SceUIntPtr v, SceUInt32 n, SceUIntPtr v2){
 
 	SceUInt32 domain, ns, xn, tex, nG, s, ap, c, b;
@@ -167,79 +169,100 @@ int _fapsCoredumpCreateTTBR1Dump(FapsCoredumpContext *context, SceUIDAddressSpac
 
 	return 0;
 }
+*/
 
-int write_as_phymem_part(SceUIDPhyMemPartObject *a1){
-
-	int res;
-
-	if(a1 == NULL)
-		return 0;
-
-	SceSysmemAddressSpaceInfo as_info;
-	memset(&as_info, 0, sizeof(as_info));
-
-	LogWrite("\t[%-31s]\n", a1->name);
-
-	res = sceKernelGetPhyMemPartInfoCore(a1, &as_info);
-	if(res < 0){
-		LogWrite("\tFailed getPhyMemPartInfoCore : 0x%X\n", res);
-		return res;
-	}
-
-	LogWrite("\tbase:0x%08X, total:0x%08X, free:0x%08X\n\n", as_info.base, as_info.total, as_info.free);
-
-	return 0;
-}
+typedef struct SceKernelAddressSpaceInfo { // size is 0x654-bytes
+    SceSize size;
+	SceUID asid;
+	SceUInt8 CONTEXTID;
+	SceUInt8 paddinf[3];
+	SceUInt32 nList;
+	struct {
+		SceSize size;
+		SceUIDPartitionObject *pPart;
+		SceUIntPtr vbase;
+		SceSize vsize;
+		SceUInt32 unk_0x10; // nBlock?
+		SceSize vsizeRemain;
+		const char *name;
+		SceUInt32 unk_0x1C;
+		SceUInt32 unk_0x20;
+		SceUInt32 unk_0x24;
+		SceUInt32 unk_0x28;
+		SceUInt32 unk_0x2C;
+	} list[0x20];
+	SceUInt32 nPhyMemPart;
+	SceUIDPhyMemPartObject *pPhyMemPart[0x10];
+} SceKernelAddressSpaceInfo;
 
 int fapsCoredumpCreateAsInfoDump(FapsCoredumpContext *context){
 
 	int res;
-	SceUIDAddressSpaceObject *pAsInfoProc;
+	SceKernelAddressSpaceInfo *as_info;
 
-	res = sceKernelSysrootPIDtoAddressSpaceCB(context->pid, &pAsInfoProc);
-	if(res < 0){
-		return res;
+	as_info = ksceKernelAllocHeapMemory(0x1000B, sizeof(*as_info));
+	if(as_info == NULL){
+		ksceDebugPrintf("%s sceKernelAllocHeapMemory result is SCE_NULL\n", __FUNCTION__);
+		return 0;
 	}
 
-	context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
-	snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s", context->path, "address_space_info.txt");
-	if(LogOpen(context->temp) < 0)
-		return -1;
+	do {
+		SceUID asid = sceKernelGetProcessAddressSpace(context->pid);
+		if(asid < 0){
+			ksceDebugPrintf("sceKernelGetProcessAddressSpace 0x%08X\n", asid);
+			break;
+		}
 
-	LogWrite("=== Physics memory partition info ===\n\n");
+		memset(as_info, 0, sizeof(*as_info));
+		as_info->size = sizeof(*as_info);
 
-	write_as_phymem_part(pAsInfoProc->unk_0x130);
-	write_as_phymem_part(pAsInfoProc->unk_0x134);
-	write_as_phymem_part(pAsInfoProc->unk_0x138);
-	write_as_phymem_part(pAsInfoProc->unk_0x13C);
-	write_as_phymem_part(pAsInfoProc->unk_0x140);
-	write_as_phymem_part(pAsInfoProc->unk_0x144);
-	write_as_phymem_part(pAsInfoProc->unk_0x148);
-	write_as_phymem_part(pAsInfoProc->unk_0x14C);
-	write_as_phymem_part(pAsInfoProc->unk_0x150);
-	write_as_phymem_part(pAsInfoProc->unk_0x154);
-	write_as_phymem_part(pAsInfoProc->unk_0x158);
+		res = SceSysmemForKernel_C3EF4055(asid, as_info);
+		if(res < 0){
+			ksceDebugPrintf("%s: SceSysmemForKernel_C3EF4055 0x%X\n", __FUNCTION__, res);
+			break;
+		}
 
-	LogWrite("=== Virtual memory partition info ===\n\n");
+		context->temp[FAPS_COREDUMP_TEMP_MAX_LENGTH] = 0;
+		snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s/%s", context->path, "address_space_info.txt");
+		if(LogOpen(context->temp) < 0){
+			ksceDebugPrintf("%s: failed LogOpen\n", __FUNCTION__);
+			break;
+		}
 
-	for(int i=0;i<0x20;i++){
-		if(pAsInfoProc->pProcAS[i] != NULL){
-			LogWrite("\t[%-27s]\n", pAsInfoProc->pProcAS[i]->tiny.name);
-			LogWrite("\tbase:0x%08X, size:0x%08X\n\n", pAsInfoProc->pProcAS[i]->tiny.base_vaddr, pAsInfoProc->pProcAS[i]->tiny.base_size);
+		LogWrite("# Virtual Address Info\n");
 
-			SceObjectBase *pObj;
-			int res = ksceGUIDReferObjectWithClass(pAsInfoProc->unk_uid[i], pAsInfoProc->pProcAS[i]->tiny.pClass, &pObj);
-			if(res >= 0){
-				ksceGUIDReleaseObject(pAsInfoProc->unk_uid[i]);
+		for(int i=0;i<as_info->nList;i++){
+			LogWrite(
+				"[%-31s]: vbase=%p vsize=0x%08X/0x%08X\n",
+				as_info->list[i].name, as_info->list[i].vbase, as_info->list[i].vsize, as_info->list[i].vsizeRemain
+			);
+		}
+
+		LogWrite("\n# Physical Address Info\n");
+
+		for(int i=0;i<0x10;i++){
+			if(as_info->pPhyMemPart[i] != NULL){
+
+				SceSysmemAddressSpaceInfo pmp_info;
+				memset(&pmp_info, 0, sizeof(pmp_info));
+
+				res = sceKernelGetPhyMemPartInfoCore(as_info->pPhyMemPart[i], &pmp_info);
+				if(res < 0){
+					ksceDebugPrintf("sceKernelGetPhyMemPartInfoCore 0x%X\n", res);
+					continue;
+				}
+
+				LogWrite(
+					"[%-31s]: pbase=%p psize=0x%08X/0x%08X\n",
+					as_info->pPhyMemPart[i]->name, pmp_info.base, pmp_info.total, pmp_info.free
+				);
 			}
 		}
-	}
 
-	LogClose();
+		LogClose();
+	} while(0);
 
-	if(fapsCoredumpIsFullDump(context) != 0){
-		_fapsCoredumpCreateTTBR1Dump(context, pAsInfoProc);
-	}
+	ksceKernelFreeHeapMemory(0x1000B, as_info);
 
 	return 0;
 }

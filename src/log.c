@@ -8,10 +8,6 @@
 #include <psp2kern/io/fcntl.h>
 #include "log.h"
 
-typedef void (* SceKernelVsnprintfCallback)(void *argp, int ch);
-
-int __vsnprintf_internal(SceKernelVsnprintfCallback cb, void *argp, const char *fmt, va_list list);
-
 typedef struct FapsLogWriteParam {
 	char *log_buffer;
 	int log_buffer_size;
@@ -76,7 +72,7 @@ int LogWrite(const char *fmt, ...){
 		return -1;
 
 	va_start(args, fmt);
-	__vsnprintf_internal(fapsCoredumpLogWriteInternal, &log_write_param, fmt, args);
+	__prnt(fapsCoredumpLogWriteInternal, &log_write_param, fmt, args);
 	va_end(args);
 
 	return 0;

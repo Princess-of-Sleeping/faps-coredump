@@ -8,18 +8,18 @@
 #include <psp2kern/kernel/sysclib.h>
 #include "log.h"
 #include "utility.h"
-#include "modulemgr_internal.h"
+#include "modulemgr_3.10_3.74.h"
 #include "coredump_func.h"
 
 extern SceClass *(* _ksceKernelGetUIDProcessClass)(void);
-extern SceKernelProcessModuleInfo *(* sceKernelProcessModuleInfo)(SceUID pid);
+extern SceKernelLibraryDB *(* sceKernelProcessModuleInfo)(SceUID pid);
 
 int fapsCoredumpCreateProcessInfo(FapsCoredumpContext *context){
 
 	int res;
 	void *pObj;
 
-	SceKernelProcessModuleInfo *process_module_info = context->process_module_info;
+	SceKernelLibraryDB *process_module_info = context->process_module_info;
 
 	if(process_module_info == NULL)
 		return -1;
@@ -43,10 +43,10 @@ int fapsCoredumpCreateProcessInfo(FapsCoredumpContext *context){
 	LogWrite("\n");
 
 	LogWrite("# Module info\n");
-	LogWrite("\tmodule count : %u\n", process_module_info->process_module_count);
+	LogWrite("\tmodule count : %u\n", process_module_info->ModuleCounter);
 	LogWrite("\tinhibit state\n");
 
-	SceUInt16 inhibit_state = process_module_info->inhibit_state;
+	SceUInt16 inhibit_state = process_module_info->flags;
 
 	if(inhibit_state == 0){
 		LogWrite("\t- none\n");

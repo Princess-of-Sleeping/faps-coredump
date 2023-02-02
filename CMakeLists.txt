@@ -64,7 +64,6 @@ target_link_libraries(faps-coredump
   taihenForKernel_stub
   taihenModuleUtils_stub
   ${CMAKE_CURRENT_BINARY_DIR}/../extra/libSceKernelThreadMgr_stub.a
-  ${CMAKE_CURRENT_BINARY_DIR}/../extra/libSceSysmem_stub.a
 )
 
 set_target_properties(faps-coredump

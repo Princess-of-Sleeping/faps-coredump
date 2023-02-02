@@ -8,6 +8,7 @@
 
 #include <psp2kern/kernel/processmgr.h>
 #include <psp2kern/kernel/sysroot.h>
+#include "modulemgr_3.10_3.74.h"
 
 #define FAPS_COREDUMP_TITLEID_SIZE       (0x20)
 #define FAPS_COREDUMP_TITLEID_MAX_LENGTH (FAPS_COREDUMP_TITLEID_SIZE - 1)
@@ -36,9 +37,9 @@ typedef struct FapsCoredumpContext {
 	int task_id;
 	int cause_flag;
 	int is_non_cpu_crash;
-	SceKernelProcessModuleInfo *process_module_info;
+	SceKernelLibraryDB *process_module_info;
 
-	SceModuleInfoInternal *module_list[0xC0];
+	SceModuleCB *module_list[0xC0];
 	char titleid[FAPS_COREDUMP_TITLEID_SIZE];
 	char name[FAPS_COREDUMP_NAME_SIZE];
 	char path[FAPS_COREDUMP_PATH_SIZE];

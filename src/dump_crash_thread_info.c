@@ -17,7 +17,212 @@
 #include "threadmgr_types.h"
 
 extern int (* sceCoredumpGetCrashThreadCause)(SceUID thid, const SceCoredumpCrashCauseParam *param, SceCoredumpCrashCauseResult *result);
-extern void (* sceKernelExcpmgrGetCpsrStrings)(char *dst, SceUInt32 cpsr);
+
+
+static const char * const it_block_list[0x10] = {
+	"     ",
+	"ITEEE",
+	"ITEE ",
+	"ITEET",
+	"ITE  ",
+	"ITETE",
+	"ITET ",
+	"ITETT",
+	"IT   ",
+	"ITTEE",
+	"ITTE ",
+	"ITTET",
+	"ITT  ",
+	"ITTTE",
+	"ITTT ",
+	"ITTTT"
+};
+
+static const char * const it_block_list_inv[0x10] = {
+	"     ",
+	"ITTTT",
+	"ITTT ",
+	"ITTTE",
+	"ITT  ",
+	"ITTET",
+	"ITTE ",
+	"ITTEE",
+	"IT   ",
+	"ITETT",
+	"ITET ",
+	"ITETE",
+	"ITE  ",
+	"ITEET",
+	"ITEE ",
+	"ITEEE"
+};
+
+static const char * const arm_cond_list[0x10] = {
+	"EQ",
+	"NE",
+	"CS",
+	"CC",
+	"MI",
+	"PL",
+	"VS",
+	"VC",
+	"HI",
+	"LS",
+	"GE",
+	"LT",
+	"GT",
+	"LE",
+	"AL",
+	"  "
+};
+
+void sceKernelGetCPSRStrings(char *dst, SceUInt32 cpsr){
+
+	char *current;
+	SceUInt32 it_blk;
+
+	current = dst;
+
+	current[0] = ((cpsr & 0x80000000) != 0) ? 'N' : 'n';
+	current[1] = ((cpsr & 0x40000000) != 0) ? 'Z' : 'z';
+	current[2] = ((cpsr & 0x20000000) != 0) ? 'C' : 'c';
+	current[3] = ((cpsr & 0x10000000) != 0) ? 'V' : 'v';
+	current[4] = ((cpsr & 0x8000000) != 0) ? 'Q' : 'q';
+	current[5] = ' ';
+	current += 6;
+
+	current[0] = 'G';
+	current[1] = 'E';
+	current[2] = ((cpsr & 0x80000) == 0) ? '_' : '3';
+	current[3] = ((cpsr & 0x40000) == 0) ? '_' : '2';
+	current[4] = ((cpsr & 0x20000) == 0) ? '_' : '1';
+	current[5] = ((cpsr & 0x10000) == 0) ? '_' : '0';
+	current[6] = ' ';
+	current += 7;
+
+	it_blk = ((cpsr << 5) >> 0x1E) | (((cpsr << 0x14) >> 0x1E) << 2);
+	if(it_blk != 0){
+		if(((cpsr >> 0xC) & 1) != 0){
+			current[0] = it_block_list[it_blk][0];
+			current[1] = it_block_list[it_blk][1];
+			current[2] = it_block_list[it_blk][2];
+			current[3] = it_block_list[it_blk][3];
+			current[4] = it_block_list[it_blk][4];
+		}else{
+			current[0] = it_block_list_inv[it_blk][0];
+			current[1] = it_block_list_inv[it_blk][1];
+			current[2] = it_block_list_inv[it_blk][2];
+			current[3] = it_block_list_inv[it_blk][3];
+			current[4] = it_block_list_inv[it_blk][4];
+		}
+
+		current[5] = ' ';
+		current[6] = arm_cond_list[(cpsr >> 0xC) & 0xF][0];
+		current[7] = arm_cond_list[(cpsr >> 0xC) & 0xF][1];
+		current += 8;
+	}
+
+	current[0] = ((cpsr & 0x200) != 0) ? 'E' : 'e';
+	current[1] = ((cpsr & 0x100) != 0) ? 'A' : 'a';
+	current[2] = ((cpsr & 0x80) != 0) ? 'I' : 'i';
+	current[3] = ((cpsr & 0x40) != 0) ? 'F' : 'f';
+	current[4] = ' ';
+	current += 5;
+
+	switch(cpsr & 0x1000020){
+	case 0:
+		current[0] = 'A';
+		current[1] = 'R';
+		current[2] = 'M';
+		current += 3;
+		break;
+	case 0x20:
+		current[0] = 'T';
+		current[1] = 'h';
+		current[2] = 'u';
+		current[3] = 'm';
+		current[4] = 'b';
+		current += 5;
+		break;
+	case 0x1000000:
+		current[0] = 'J';
+		current[1] = 'a';
+		current[2] = 'z';
+		current[3] = 'e';
+		current[4] = 'l';
+		current[5] = 'l';
+		current[6] = 'e';
+		current += 7;
+		break;
+	case 0x1000020:
+		current[0] = 'T';
+		current[1] = 'h';
+		current[2] = 'u';
+		current[3] = 'm';
+		current[4] = 'b';
+		current[5] = 'E';
+		current[6] = 'E';
+		current += 7;
+		break;
+	default:
+		break;
+	}
+
+	current[0] = ' ';
+
+	switch(cpsr & 0x1F){
+	case 0x10:
+		current[1] = 'U';
+		current[2] = 's';
+		current[3] = 'r';
+		break;
+	case 0x11:
+		current[1] = 'F';
+		current[2] = 'i';
+		current[3] = 'q';
+		break;
+	case 0x12:
+		current[1] = 'I';
+		current[2] = 'r';
+		current[3] = 'q';
+		break;
+	case 0x13:
+		current[1] = 'S';
+		current[2] = 'v';
+		current[3] = 'c';
+		break;
+	case 0x16:
+		current[1] = 'M';
+		current[2] = 'o';
+		current[3] = 'n';
+		break;
+	case 0x17:
+		current[1] = 'A';
+		current[2] = 'b';
+		current[3] = 't';
+		break;
+	case 0x1B:
+		current[1] = 'U';
+		current[2] = 'n';
+		current[3] = 'd';
+		break;
+	case 0x1F:
+		current[1] = 'S';
+		current[2] = 'y';
+		current[3] = 's';
+		break;
+	default:
+		current[1] = '?';
+		current[2] = '?';
+		current[3] = '?';
+		break;
+	}
+
+	current[4] = 0;
+}
+
+
+
 
 int getAddressLocation(char *dst, int max_len, SceUID pid, unsigned int val){
 
@@ -112,7 +317,7 @@ void LogWriteArmRegs(SceUID pid, ArmCpuRegisters *arm_regs){
 
 	_LogWriteArmRegs(arm_regs);
 
-	sceKernelExcpmgrGetCpsrStrings(cpsr_str, arm_regs->cpsr);
+	sceKernelGetCPSRStrings(cpsr_str, arm_regs->cpsr);
 
 	LogWrite("cpsr  0x%08X [%s]\n", arm_regs->cpsr, cpsr_str);
 	LogWrite("fpscr 0x%08X\n", arm_regs->fpscr);

@@ -10,20 +10,20 @@
 #include <psp2kern/io/stat.h>
 #include "log.h"
 #include "utility.h"
-#include "modulemgr_internal.h"
+#include "modulemgr_3.10_3.74.h"
 #include "process_mapping.h"
 #include "coredump_func.h"
 #include "sysmem_types.h"
 #include "elf.h"
 
 extern SceClass *(* _ksceKernelGetUIDMemBlockClass)(void);
-extern SceKernelProcessModuleInfo *(* sceKernelGetProcessModuleInfo)(SceUID pid);
+extern SceKernelLibraryDB *(* sceKernelGetProcessModuleInfo)(SceUID pid);
 
 int fapsCoredumpInitProcessModule(FapsCoredumpContext *context){
 
 	int idx = 0;
-	SceKernelProcessModuleInfo *process_module_info;
-	SceModuleInfoInternal *module_info;
+	SceKernelLibraryDB *process_module_info;
+	SceModuleCB *module_info;
 
 	process_module_info = sceKernelGetProcessModuleInfo(context->pid);
 
@@ -31,7 +31,7 @@ int fapsCoredumpInitProcessModule(FapsCoredumpContext *context){
 	if(process_module_info == NULL)
 		return -1;
 
-	module_info = process_module_info->module_info;
+	module_info = process_module_info->ModuleHead;
 
 	while(module_info != NULL){
 		context->module_list[idx++] = module_info;
@@ -120,7 +120,7 @@ int write_membase_base_list(FapsCoredumpContext *context, SceUID memblk_id){
 int fapsCoredumpCreateModulesInfo(FapsCoredumpContext *context){
 
 	SceSize modnum;
-	SceModuleInfoInternal *module_info;
+	SceModuleCB *module_info;
 
 	if(context->process_module_info == NULL)
 		return -1;
@@ -130,51 +130,51 @@ int fapsCoredumpCreateModulesInfo(FapsCoredumpContext *context){
 	if(LogOpen(context->temp) < 0)
 		return -1;
 
-	modnum = context->process_module_info->process_module_count;
+	modnum = context->process_module_info->ModuleCounter;
 
 	do {
 		modnum--;
 		module_info = context->module_list[modnum];
 
-		if(module_info->segments[1].memsz != 0){
+		if(module_info->segment[1].memsz != 0){
 			LogWrite(
 				"[%-27s]:text=%p(0x%08x), data=%p(0x%08x/0x%08x)\n",
 				module_info->module_name,
-				module_info->segments[0].vaddr,
-				module_info->segments[0].memsz,
-				module_info->segments[1].vaddr,
-				module_info->segments[1].filesz,
-				module_info->segments[1].memsz
+				module_info->segment[0].vaddr,
+				module_info->segment[0].memsz,
+				module_info->segment[1].vaddr,
+				module_info->segment[1].filesz,
+				module_info->segment[1].memsz
 			);
 		}else{
 			LogWrite(
 				"[%-27s]:text=%p(0x%08x), (no data)\n",
 				module_info->module_name,
-				module_info->segments[0].vaddr,
-				module_info->segments[0].memsz
+				module_info->segment[0].vaddr,
+				module_info->segment[0].memsz
 			);
 		}
 
-		SceUInt32 sdk = module_info->version;
+		SceUInt32 sdk = module_info->module_sdk_version;
 
-		LogWrite("module id      : 0x%08X/0x%08X\n", module_info->modid_user, module_info->modid_kernel);
+		LogWrite("module id      : 0x%08X/0x%08X\n", module_info->module_puid, module_info->module_guid);
 		LogWrite("path           : %s\n", module_info->path);
 		LogWrite("version        : %X.%X\n", module_info->major, module_info->minor);
 		LogWrite("SDK            : %X.%03X.%03X\n", (sdk >> 24) & 0xFF, (sdk >> 12) & 0xFFF, sdk & 0xFFF);
 		LogWrite("attr           : 0x%04X\n", module_info->attr);
 		LogWrite("fingerprint    : 0x%08X\n", module_info->fingerprint);
-		LogWrite("library export : %d\n", module_info->lib_export_num);
-		LogWrite("library import : %d\n", module_info->lib_import_num);
+		LogWrite("library export : %d\n", module_info->ExportCounter);
+		LogWrite("library import : %d\n", module_info->ImportCounter);
 
 		LogWrite("flags          : 0x%04X\n", module_info->flags);
-		LogWrite("text params    : 0x%02X, align:0x%X", module_info->segments[0].perms[0], (1 << module_info->segments[0].perms[2]));
-		if(module_info->segments[0].perms[1] != 0)
-			LogWrite(", extra memory size:0x%X", (module_info->segments[0].perms[1] << 0xC));
+		LogWrite("text params    : 0x%02X, align:0x%X", module_info->segment[0].perms[0], (1 << module_info->segment[0].perms[2]));
+		if(module_info->segment[0].perms[1] != 0)
+			LogWrite(", extra memory size:0x%X", (module_info->segment[0].perms[1] << 0xC));
 		LogWrite("\n");
 
-		LogWrite("data params    : 0x%02X, align:0x%X", module_info->segments[1].perms[0], (1 << module_info->segments[1].perms[2]));
-		if(module_info->segments[1].perms[1] != 0)
-			LogWrite(", extra memory size:0x%X", (module_info->segments[1].perms[1] << 0xC));
+		LogWrite("data params    : 0x%02X, align:0x%X", module_info->segment[1].perms[0], (1 << module_info->segment[1].perms[2]));
+		if(module_info->segment[1].perms[1] != 0)
+			LogWrite(", extra memory size:0x%X", (module_info->segment[1].perms[1] << 0xC));
 		LogWrite("\n");
 
 		// LogWrite("first import   : %s\n", module_info->data_0x60->type2.libname);
@@ -182,8 +182,8 @@ int fapsCoredumpCreateModulesInfo(FapsCoredumpContext *context){
 
 		if(fapsCoredumpIsFullDump(context) != 0){
 			LogWrite("module membase list\n");
-			write_membase_base_list(context, module_info->segments[0].memblk_id);
-			write_membase_base_list(context, module_info->segments[1].memblk_id);
+			write_membase_base_list(context, module_info->segment[0].memblk_id);
+			write_membase_base_list(context, module_info->segment[1].memblk_id);
 		}
 	} while(modnum > 0);
 
@@ -215,7 +215,7 @@ typedef struct SceModuleEntryPoint { // size is 0x5C-bytes
 	SceUInt32 extab_end;
 } SceModuleEntryPoint;
 
-int search_module_entry_point(SceUID pid, SceModuleInfoInternal *module_info, SceUInt32 *entry){
+int search_module_entry_point(SceUID pid, SceModuleCB *module_info, SceUInt32 *entry){
 
 	void *ent, *curr_ptr;
 	char module_name[0x1C];
@@ -223,15 +223,15 @@ int search_module_entry_point(SceUID pid, SceModuleInfoInternal *module_info, Sc
 
 	if(module_info->libent_top != NULL){ // get module entry point
 
-		SceSize remain = module_info->libent_top - module_info->segments[0].vaddr;
+		SceSize remain = module_info->libent_top - module_info->segment[0].vaddr;
 		while(remain >= (0x24 + 4)){
 			remain -= 4;
 
-			curr_ptr = module_info->segments[0].vaddr + remain;
+			curr_ptr = module_info->segment[0].vaddr + remain;
 
 			ksceKernelProcMemcpyFromUser(pid, &ent, curr_ptr, sizeof(ent));
 
-			if(ent == (void *)(module_info->libent_top - module_info->segments[0].vaddr)){
+			if(ent == (void *)(module_info->libent_top - module_info->segment[0].vaddr)){
 
 				ksceKernelProcMemcpyFromUser(pid, &entryPoint, curr_ptr - 0x24, sizeof(entryPoint));
 
@@ -269,7 +269,7 @@ int fapsCoredumpCreateModuleSegmentDump(FapsCoredumpContext *context){
 	SceUID memid;
 	void *base;
 	SceSize modnum;
-	SceModuleInfoInternal *module_info;
+	SceModuleCB *module_info;
 	Elf32_Ehdr ehdr;
 	ElfEntryInfo elf_ent[2];
 	uint32_t offset;
@@ -294,13 +294,13 @@ int fapsCoredumpCreateModuleSegmentDump(FapsCoredumpContext *context){
 		goto end;
 	}
 
-	modnum = context->process_module_info->process_module_count;
+	modnum = context->process_module_info->ModuleCounter;
 
 	do {
 		modnum--;
 		module_info = context->module_list[modnum];
 
-		if(module_info->segments_num < 3){
+		if(module_info->SegmentCounter < 3){
 
 			uint32_t entry = 0xDEADBEEF;
 
@@ -310,21 +310,21 @@ int fapsCoredumpCreateModuleSegmentDump(FapsCoredumpContext *context){
 				entry = ~0;
 			}
 
-			offset = sizeof(Elf32_Ehdr) + module_info->segments_num * sizeof(ElfEntryInfo);
+			offset = sizeof(Elf32_Ehdr) + module_info->SegmentCounter * sizeof(ElfEntryInfo);
 
-			for(int i=0;i<module_info->segments_num;i++){
+			for(int i=0;i<module_info->SegmentCounter;i++){
 				offset = ((offset + 0xF) & ~0xF);
 				elf_ent[i].type   = 1;
-				elf_ent[i].vaddr  = (uint32_t)module_info->segments[i].vaddr;
-				elf_ent[i].paddr  = (uint32_t)module_info->segments[i].vaddr;
-				elf_ent[i].filesz = module_info->segments[i].memsz;
-				elf_ent[i].memsz  = module_info->segments[i].memsz;
-				elf_ent[i].flags  = module_info->segments[i].perms[0];
-				elf_ent[i].align  = 1 << module_info->segments[i].perms[2];
+				elf_ent[i].vaddr  = (uint32_t)module_info->segment[i].vaddr;
+				elf_ent[i].paddr  = (uint32_t)module_info->segment[i].vaddr;
+				elf_ent[i].filesz = module_info->segment[i].memsz;
+				elf_ent[i].memsz  = module_info->segment[i].memsz;
+				elf_ent[i].flags  = module_info->segment[i].perms[0];
+				elf_ent[i].align  = 1 << module_info->segment[i].perms[2];
 
 				elf_ent[i].offset = (offset + (elf_ent[i].align - 1)) & ~(elf_ent[i].align - 1);
 
-				offset = elf_ent[i].offset + module_info->segments[i].memsz;
+				offset = elf_ent[i].offset + module_info->segment[i].memsz;
 			}
 
 			memset(&ehdr, 0, sizeof(ehdr));
@@ -347,7 +347,7 @@ int fapsCoredumpCreateModuleSegmentDump(FapsCoredumpContext *context){
 			ehdr.e_flags     = 0x05000000;
 			ehdr.e_ehsize    = sizeof(ehdr);
 			ehdr.e_phentsize = sizeof(ElfEntryInfo);
-			ehdr.e_phnum     = module_info->segments_num;
+			ehdr.e_phnum     = module_info->SegmentCounter;
 			ehdr.e_shentsize = 0;
 
 			ehdr.e_shnum = 0;
@@ -359,11 +359,11 @@ int fapsCoredumpCreateModuleSegmentDump(FapsCoredumpContext *context){
 			SceUID fd = ksceIoOpen(context->temp, SCE_O_CREAT | SCE_O_TRUNC | SCE_O_WRONLY, 0666);
 			if(fd >= 0){
 				write_file_proc_by_fd(0x10005, fd, &ehdr, sizeof(ehdr));
-				write_file_proc_by_fd(0x10005, fd, elf_ent, sizeof(ElfEntryInfo) * module_info->segments_num);
+				write_file_proc_by_fd(0x10005, fd, elf_ent, sizeof(ElfEntryInfo) * module_info->SegmentCounter);
 
-				offset = sizeof(Elf32_Ehdr) + module_info->segments_num * sizeof(ElfEntryInfo);
+				offset = sizeof(Elf32_Ehdr) + module_info->SegmentCounter * sizeof(ElfEntryInfo);
 
-				for(int i=0;i<module_info->segments_num;i++){
+				for(int i=0;i<module_info->SegmentCounter;i++){
 
 					if((elf_ent[i].offset - offset) != 0){
 						write_file_proc_by_fd(module_info->pid, fd, base, elf_ent[i].offset - offset);
@@ -371,9 +371,9 @@ int fapsCoredumpCreateModuleSegmentDump(FapsCoredumpContext *context){
 
 					offset = (offset + (elf_ent[i].align - 1)) & ~(elf_ent[i].align - 1);
 
-					write_file_proc_by_fd(module_info->pid, fd, module_info->segments[i].vaddr, module_info->segments[i].memsz);
+					write_file_proc_by_fd(module_info->pid, fd, module_info->segment[i].vaddr, module_info->segment[i].memsz);
 
-					offset += module_info->segments[i].memsz;
+					offset += module_info->segment[i].memsz;
 				}
 
 				ksceIoClose(fd);
@@ -394,7 +394,7 @@ int fapsCoredumpCreateModuleNonlinkedInfo(FapsCoredumpContext *context){
 	if(context->process_module_info == NULL)
 		return -1;
 
-	SceModuleImportInfo *pNonlinkedInfo = context->process_module_info->nonlinked_info;
+	SceModuleClient *pNonlinkedInfo = context->process_module_info->LostClientHead;
 
 	if(pNonlinkedInfo == NULL){
 		ksceDebugPrintf("[%-7s] not has nonlinked to this process.\n", "info");
@@ -412,17 +412,17 @@ int fapsCoredumpCreateModuleNonlinkedInfo(FapsCoredumpContext *context){
 
 	while(pNonlinkedInfo != NULL){
 
-		if(strcmp(pNonlinkedInfo->pModuleInfo->module_name, old_name) != 0){
-			old_name = pNonlinkedInfo->pModuleInfo->module_name;
+		if(strcmp(pNonlinkedInfo->Module->module_name, old_name) != 0){
+			old_name = pNonlinkedInfo->Module->module_name;
 			LogWrite("\n[%-27s]\n", old_name);
 		}
 
 		LogWrite(
 			"\tnid=0x%08X, flags=0x%04X, ver=%d, %s\n",
-			pNonlinkedInfo->pImportInfo->type2.libnid,
-			pNonlinkedInfo->pImportInfo->type2.flags,
-			pNonlinkedInfo->pImportInfo->type2.version,
-			pNonlinkedInfo->pImportInfo->type2.libname
+			pNonlinkedInfo->Import->libnid,
+			pNonlinkedInfo->Import->flags,
+			pNonlinkedInfo->Import->version,
+			pNonlinkedInfo->Import->libname
 		);
 
 		pNonlinkedInfo = pNonlinkedInfo->next;
@@ -436,7 +436,7 @@ int fapsCoredumpCreateModuleNonlinkedInfo(FapsCoredumpContext *context){
 int fapsCoredumpCreateModuleImportYml(FapsCoredumpContext *context){
 
 	int res;
-	SceModuleInfoInternal *pModuleInfo;
+	SceModuleCB *pModuleInfo;
 
 	if(context->process_module_info == NULL)
 		return -1;
@@ -448,7 +448,7 @@ int fapsCoredumpCreateModuleImportYml(FapsCoredumpContext *context){
 	if(res < 0)
 		return res;
 
-	pModuleInfo = context->process_module_info->module_info;
+	pModuleInfo = context->process_module_info->ModuleHead;
 
 	while(pModuleInfo != NULL){
 
@@ -465,8 +465,8 @@ int fapsCoredumpCreateModuleImportYml(FapsCoredumpContext *context){
 		SceModuleImport *pImportInfo;
 		FapsProcessMappingContext mapping_context;
 
-		version_upper = (pModuleInfo->version >> 24) & 0xFF;
-		version_lower = (pModuleInfo->version >> 16) & 0xFF;
+		version_upper = (pModuleInfo->module_sdk_version >> 24) & 0xFF;
+		version_lower = (pModuleInfo->module_sdk_version >> 16) & 0xFF;
 
 		LogWrite("firmware: %X.%02X\n", version_upper, version_lower);
 		LogWrite("modules:\n");
@@ -474,35 +474,35 @@ int fapsCoredumpCreateModuleImportYml(FapsCoredumpContext *context){
 		LogWrite("    nid: 0x%08X\n", pModuleInfo->fingerprint);
 		LogWrite("    libraries:\n");
 
-		for(int i=0;i<pModuleInfo->lib_import_num;i++){
+		for(int i=0;i<pModuleInfo->ImportCounter;i++){
 
-			pImportInfo = pModuleInfo->import_list[i].pImportInfo;
+			pImportInfo = pModuleInfo->ClientVector[i].Import;
 
-			LogWrite("      %s:\n", pImportInfo->type2.libname);
-			LogWrite("        version: 0x%04X\n", pImportInfo->type2.version);
-			LogWrite("        flags: 0x%04X\n", pImportInfo->type2.flags);
-			LogWrite("        nid: 0x%08X\n", pImportInfo->type2.libnid);
+			LogWrite("      %s:\n", pImportInfo->libname);
+			LogWrite("        version: 0x%04X\n", pImportInfo->version);
+			LogWrite("        flags: 0x%04X\n", pImportInfo->flags);
+			LogWrite("        nid: 0x%08X\n", pImportInfo->libnid);
 
-			ent_num = pImportInfo->type2.entry_num_function;
+			ent_num = pImportInfo->entry_num_function;
 			if(ent_num > 0){
-				res = faps_process_mapping_map(&mapping_context, pModuleInfo->pid, (void **)&pNIDTable, pImportInfo->type2.table_func_nid, ent_num * sizeof(SceNID));
+				res = faps_process_mapping_map(&mapping_context, pModuleInfo->pid, (void **)&pNIDTable, pImportInfo->table_func_nid, ent_num * sizeof(SceNID));
 				if(res >= 0){
 					LogWrite("        function:\n");
 					for(int i=0;i<ent_num;i++){
-						snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s_%08X", pImportInfo->type2.libname, pNIDTable[i]);
+						snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s_%08X", pImportInfo->libname, pNIDTable[i]);
 						LogWrite("          %s: 0x%08X\n", context->temp, pNIDTable[i]);
 					}
 					faps_process_mapping_unmap(&mapping_context);
 				}
 			}
 
-			ent_num = pImportInfo->type2.entry_num_variable;
+			ent_num = pImportInfo->entry_num_variable;
 			if(ent_num > 0){
-				res = faps_process_mapping_map(&mapping_context, pModuleInfo->pid, (void **)&pNIDTable, pImportInfo->type2.table_vars_nid, ent_num * sizeof(SceNID));
+				res = faps_process_mapping_map(&mapping_context, pModuleInfo->pid, (void **)&pNIDTable, pImportInfo->table_vars_nid, ent_num * sizeof(SceNID));
 				if(res >= 0){
 					LogWrite("        variable:\n");
 					for(int i=0;i<ent_num;i++){
-						snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s_%08X", pImportInfo->type2.libname, pNIDTable[i]);
+						snprintf(context->temp, FAPS_COREDUMP_TEMP_MAX_LENGTH, "%s_%08X", pImportInfo->libname, pNIDTable[i]);
 						LogWrite("          %s: 0x%08X\n", context->temp, pNIDTable[i]);
 					}
 					faps_process_mapping_unmap(&mapping_context);
@@ -521,7 +521,7 @@ int fapsCoredumpCreateModuleImportYml(FapsCoredumpContext *context){
 int fapsCoredumpCreateModuleExportYml(FapsCoredumpContext *context){
 
 	int res;
-	SceModuleInfoInternal *pModuleInfo;
+	SceModuleCB *pModuleInfo;
 
 	if(context->process_module_info == NULL)
 		return -1;
@@ -533,7 +533,7 @@ int fapsCoredumpCreateModuleExportYml(FapsCoredumpContext *context){
 	if(res < 0)
 		return res;
 
-	pModuleInfo = context->process_module_info->module_info;
+	pModuleInfo = context->process_module_info->ModuleHead;
 
 	while(pModuleInfo != NULL){
 
@@ -549,8 +549,8 @@ int fapsCoredumpCreateModuleExportYml(FapsCoredumpContext *context){
 		SceNID *pNIDTable;
 		FapsProcessMappingContext mapping_context;
 
-		version_upper = (pModuleInfo->version >> 24) & 0xFF;
-		version_lower = (pModuleInfo->version >> 16) & 0xFF;
+		version_upper = (pModuleInfo->module_sdk_version >> 24) & 0xFF;
+		version_lower = (pModuleInfo->module_sdk_version >> 16) & 0xFF;
 
 		LogWrite("firmware: %X.%02X\n", version_upper, version_lower);
 		LogWrite("modules:\n");
@@ -560,9 +560,9 @@ int fapsCoredumpCreateModuleExportYml(FapsCoredumpContext *context){
 
 		char lib_name[0x100];
 
-		for(int i=0;i<pModuleInfo->lib_export_num;i++){
+		for(int i=0;i<pModuleInfo->ExportCounter;i++){
 
-			SceModuleExport *pExportInfo = &(pModuleInfo->pLibraryInfo->pExportInfo[i]);
+			SceModuleExport *pExportInfo = pModuleInfo->LibEntVector[i].Export;
 
 			lib_name[sizeof(lib_name) - 1] = 0;
 

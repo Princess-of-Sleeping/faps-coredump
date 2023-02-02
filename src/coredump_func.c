@@ -7,6 +7,7 @@
 #include <psp2kern/kernel/sysclib.h>
 #include <psp2kern/kernel/rtc.h>
 #include <psp2kern/io/fcntl.h>
+#include <psp2kern/io/stat.h>
 #include <psp2kern/sblaimgr.h>
 #include "types.h"
 #include "coredump_func.h"

@@ -14,7 +14,6 @@
 #include "utility.h"
 #include "log.h"
 #include "coredump_func.h"
-#include "modulemgr_internal.h"
 
 extern SceUID mutex_uid;
 

@@ -16,6 +16,7 @@
 #include "coredump.h"
 #include "coredump_internal.h"
 #include "sce_as.h"
+#include "modulemgr_3.10_3.74.h"
 
 #define HookExport(module_name, library_nid, func_nid, func_name) taiHookFunctionExportForKernel(SCE_GUID_KERNEL_PROCESS_ID, &func_name ## _ref, module_name, library_nid, func_nid, func_name ## _patch)
 #define HookImport(module_name, library_nid, func_nid, func_name) taiHookFunctionImportForKernel(SCE_GUID_KERNEL_PROCESS_ID, &func_name ## _ref, module_name, library_nid, func_nid, func_name ## _patch)
@@ -36,9 +37,10 @@ FapsCoredumpContext coredump_context;
 
 int (* sceKernelCoredumpStateFinish)(int task_id, SceUID pid, int error_code, const char *path, SceSize path_len, int a6);
 
-int (* sceKernelSysrootPIDtoAddressSpaceCB)(SceUID pid, SceUIDAddressSpaceObject **ppInfo);
-SceKernelProcessModuleInfo *(* sceKernelGetProcessModuleInfo)(SceUID pid);
+SceKernelLibraryDB *(* sceKernelGetProcessModuleInfo)(SceUID pid);
+SceUID (* sceKernelGetProcessAddressSpace)(SceUID pid);
 
+int (* SceSysmemForKernel_C3EF4055)(SceUID asid, void *pInfo);
 SceClass *(* _ksceKernelGetUIDMemBlockClass)(void);
 SceClass *(* _ksceKernelGetUIDProcessClass)(void);
 SceClass *(* _ksceKernelGetUIDThreadClass)(void);
@@ -51,7 +53,6 @@ int (* _ksceKernelGetModuleIdByAddr)(SceUID pid, const void *a2);
 int (* sceKernelGetPhyMemPartInfoCore)(SceUIDPhyMemPartObject *a1, SceSysmemAddressSpaceInfo *pInfo);
 
 int (* sceCoredumpGetCrashThreadCause)(SceUID thid, const SceCoredumpCrashCauseParam *param, SceCoredumpCrashCauseResult *result);
-void (* sceKernelExcpmgrGetCpsrStrings)(char *dst, SceUInt32 cpsr);
 
 SceUID mutex_uid;
 SceUID hook_id[4];
@@ -184,30 +185,7 @@ int sceSblACMgrIsAllowProcessDebug_patch(SceUID pid){
 	return 1;
 }
 
-const char SceCoredump_loop_patch[0x4] = {
-	0xEC, 0xE7, 0x00, 0x00
-};
-
 int fapsCoredumpGetFunction(void){
-
-	int res;
-	SceUID module_id;
-
-	module_id = ksceKernelSearchModuleByName("SceSysmem");
-	if(module_id < 0)
-		return module_id;
-
-	res = module_get_offset(SCE_GUID_KERNEL_PROCESS_ID, module_id, 0, 0x1FF20 | 1, (uintptr_t *)&sceKernelSysrootPIDtoAddressSpaceCB);
-	if(res < 0)
-		return res;
-
-	module_id = ksceKernelSearchModuleByName("SceExcpmgr");
-	if(module_id < 0)
-		return module_id;
-
-	res = module_get_offset(SCE_GUID_KERNEL_PROCESS_ID, module_id, 0, 0x13C0 | 1, (uintptr_t *)&sceKernelExcpmgrGetCpsrStrings);
-	if(res < 0)
-		return res;
 
 	if(GetExport("SceSysmem", 0x63A519E5, 0x62989905, &_ksceKernelFindClassByName) < 0)
 	if(GetExport("SceSysmem", 0x02451F0F, 0x7D87F706, &_ksceKernelFindClassByName) < 0)
@@ -219,6 +197,10 @@ int fapsCoredumpGetFunction(void){
 
 	if(GetExport("SceSysmem", 0x63A519E5, 0x3650963F, &sceKernelGetPhyMemPartInfoCore) < 0)
 	if(GetExport("SceSysmem", 0x02451F0F, 0xB9B69700, &sceKernelGetPhyMemPartInfoCore) < 0)
+		return -1;
+
+	if(GetExport("SceSysmem", 0x63A519E5, 0x4492421F, &SceSysmemForKernel_C3EF4055) < 0)
+	if(GetExport("SceSysmem", 0x02451F0F, 0xC3EF4055, &SceSysmemForKernel_C3EF4055) < 0)
 		return -1;
 
 	if(GetExport("SceKernelModulemgr", 0xC445FA63, 0xD269F915, &_ksceKernelGetModuleInfo) < 0)
@@ -241,6 +223,10 @@ int fapsCoredumpGetFunction(void){
 	if(GetExport("SceProcessmgr", 0xEB1F8EF7, 0x98AE4BC8, &_ksceKernelGetUIDProcessClass) < 0)
 		return -1;
 
+	if(GetExport("SceProcessmgr", 0x7A69DE86, 0xC77C2085, &sceKernelGetProcessAddressSpace) < 0)
+	if(GetExport("SceProcessmgr", 0xEB1F8EF7, 0x9BC44974, &sceKernelGetProcessAddressSpace) < 0)
+		return -1;
+
 	if(GetExport("SceKernelThreadMgr", 0xA8CA0EFD, 0x88D5BC33, &_ksceKernelGetUIDThreadClass) < 0)
 	if(GetExport("SceKernelThreadMgr", 0x7F8593BA, 0x565BD2DA, &_ksceKernelGetUIDThreadClass) < 0)
 		return -1;
@@ -252,21 +238,25 @@ void _start() __attribute__ ((weak, alias ("module_start")));
 int module_start(SceSize argc, const void *args){
 
 	int res;
+	SceUInt32 oalEventQueueReceive_offset, queue_offset;
 
 	tai_module_info_t tai_coredump_info;
 	tai_coredump_info.size = sizeof(tai_module_info_t);
 
 	res = taiGetModuleInfoForKernel(SCE_GUID_KERNEL_PROCESS_ID, "SceCoredump", &tai_coredump_info);
-	if(res < 0)
+	if(res < 0){
 		return SCE_KERNEL_START_NO_RESIDENT;
+	}
 
 	res = fapsCoredumpGetFunction();
-	if(res < 0)
+	if(res < 0){
 		return SCE_KERNEL_START_NO_RESIDENT;
+	}
 
 	res = ksceKernelCreateMutex("FapsCoredumpMutex", 0, 1, 0);
-	if(res < 0)
+	if(res < 0){
 		return SCE_KERNEL_START_NO_RESIDENT;
+	}
 
 	mutex_uid = res;
 
@@ -276,13 +266,22 @@ int module_start(SceSize argc, const void *args){
 	SceUID temp_patch_uid;
 
 	switch(tai_coredump_info.module_nid){
+	case 0x0BB484AF: // special 3.50
+		temp_patch_uid = taiInjectDataForKernel(SCE_GUID_KERNEL_PROCESS_ID, tai_coredump_info.modid, 0, 0xC4B0 + 1, (SceUInt8[]){0xE7}, 1);
+		oalEventQueueReceive_offset = 0x1588;
+		queue_offset = 0x1CA10;
+		break;
 	case 0x3E0F5EBD: // 3.60
-		temp_patch_uid = taiInjectDataForKernel(SCE_GUID_KERNEL_PROCESS_ID, tai_coredump_info.modid, 0, 0xB3FA, &SceCoredump_loop_patch, 0x2);
+		temp_patch_uid = taiInjectDataForKernel(SCE_GUID_KERNEL_PROCESS_ID, tai_coredump_info.modid, 0, 0xB3FA + 1, (SceUInt8[]){0xE7}, 1);
+		oalEventQueueReceive_offset = 0x13F4;
+		queue_offset = 0x1CBC8;
 		break;
 	case 0xDAD20481: // 3.65
 	case 0x3CD1BC7E: // 3.67
 	case 0x442FC8DA: // 3.68
-		temp_patch_uid = taiInjectDataForKernel(SCE_GUID_KERNEL_PROCESS_ID, tai_coredump_info.modid, 0, 0xB3FE, &SceCoredump_loop_patch, 0x2);
+		temp_patch_uid = taiInjectDataForKernel(SCE_GUID_KERNEL_PROCESS_ID, tai_coredump_info.modid, 0, 0xB3FE + 1, (SceUInt8[]){0xE7}, 1);
+		oalEventQueueReceive_offset = 0x13F4;
+		queue_offset = 0x1CBC8;
 		break;
 	default:
 		return SCE_KERNEL_START_NO_RESIDENT;
@@ -291,7 +290,7 @@ int module_start(SceSize argc, const void *args){
 	module_get_offset(SCE_GUID_KERNEL_PROCESS_ID, tai_coredump_info.modid, 0, 0x178 | 1, (uintptr_t *)&sceCoredumpGetCrashThreadCause);
 
 	// for main hooks
-	hook_id[0] = HookOffset(tai_coredump_info.modid, 0x13F4, 1, sceCoredumpWaitRequest);
+	hook_id[0] = HookOffset(tai_coredump_info.modid, oalEventQueueReceive_offset, 1, sceCoredumpWaitRequest);
 
 	// for normal process crash
 	hook_id[1] = HookImport("SceAppMgr", 0xA351714A, 0xA7D214A7, sceKernelCoredumpTrigger);
@@ -314,7 +313,7 @@ int module_start(SceSize argc, const void *args){
 
 	SceCoredumpQueueInfo *pQueueInfo;
 
-	module_get_offset(SCE_GUID_KERNEL_PROCESS_ID, tai_coredump_info.modid, 1, 0x1CBC8, (uintptr_t *)&pQueueInfo);
+	module_get_offset(SCE_GUID_KERNEL_PROCESS_ID, tai_coredump_info.modid, 1, queue_offset, (uintptr_t *)&pQueueInfo);
 
 	pQueueInfo->task_count = 1;
 	ksceKernelSignalCond(pQueueInfo->cond_id);
