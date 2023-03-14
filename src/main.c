@@ -279,11 +279,13 @@ int module_start(SceSize argc, const void *args){
 	case 0xDAD20481: // 3.65
 	case 0x3CD1BC7E: // 3.67
 	case 0x442FC8DA: // 3.68
+	case 0x7CE02A3E: // 3.72-I
 		temp_patch_uid = taiInjectDataForKernel(SCE_GUID_KERNEL_PROCESS_ID, tai_coredump_info.modid, 0, 0xB3FE + 1, (SceUInt8[]){0xE7}, 1);
 		oalEventQueueReceive_offset = 0x13F4;
 		queue_offset = 0x1CBC8;
 		break;
 	default:
+		ksceKernelPrintf("%s fingerprint 0x%08X\n", "SceCoredump", tai_coredump_info.module_nid);
 		return SCE_KERNEL_START_NO_RESIDENT;
 	}
 
