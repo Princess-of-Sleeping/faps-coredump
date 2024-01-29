@@ -264,7 +264,7 @@ const char *getThreadStatusStrings(int status){
 	status = status & (~(status - 1));
 
 	if((status & SCE_THREAD_RUNNING) != 0)
-		return "Runnig";
+		return "Running";
 
 	if((status & SCE_THREAD_READY) != 0)
 		return "Ready";
